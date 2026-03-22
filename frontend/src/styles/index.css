@@ -1,0 +1,225 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Monospace font (self-hosted) ───────────────────────────────────────── */
+@font-face {
+  font-family: 'JetBrainsMonoVF';
+  src: url('/fonts/JetBrainsMono_vf.woff2') format('woff2'),
+       url('/fonts/JetBrainsMono_vf.woff')  format('woff');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Light theme – from sample project ──────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Surfaces — sample: bg-dark=#f8fafc, bg-light=#f1f5f9, surface=#ffffff, surface-border=#e2e8f0 */
+  --color-background:               241 245 249;
+  --color-surface:                  241 245 249;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-low:    255 255 255;
+  --color-surface-container:        248 250 252;
+  --color-surface-container-high:   241 245 249;
+  --color-surface-container-highest:226 232 240;
+  --color-surface-dim:              226 232 240;
+  --color-surface-bright:           255 255 255;
+  --color-surface-variant:          226 232 240;
+
+  /* Text — sample: foreground=#0f172a, text-secondary=#64748b */
+  --color-on-background:            15 23 42;
+  --color-on-surface:               15 23 42;
+  --color-on-surface-variant:       100 116 139;
+  --color-inverse-surface:          15 23 42;
+  --color-inverse-on-surface:       248 250 252;
+
+  /* Primary – sky-600 (#0284c7) for readable cyan on light backgrounds */
+  --color-primary:                  2 132 199;
+  --color-on-primary:               255 255 255;
+  --color-primary-container:        186 230 253;
+  --color-on-primary-container:     12 74 110;
+  --color-primary-fixed:            2 132 199;
+  --color-primary-fixed-dim:        3 105 161;
+  --color-on-primary-fixed:         255 255 255;
+  --color-on-primary-fixed-variant: 255 255 255;
+  --color-inverse-primary:          0 173 239;
+
+  /* Secondary – violet-600 for accent contrast on light */
+  --color-secondary:                124 58 237;
+  --color-on-secondary:             255 255 255;
+  --color-secondary-container:      237 233 254;
+  --color-on-secondary-container:   46 16 101;
+  --color-secondary-fixed:          124 58 237;
+  --color-secondary-fixed-dim:      109 40 217;
+  --color-on-secondary-fixed:       255 255 255;
+  --color-on-secondary-fixed-variant:255 255 255;
+
+  /* Tertiary – orange-700 for unstable/warning on light */
+  --color-tertiary:                 194 65 12;
+  --color-on-tertiary:              255 255 255;
+  --color-tertiary-container:       254 215 170;
+  --color-on-tertiary-container:    124 45 18;
+  --color-tertiary-fixed:           194 65 12;
+  --color-tertiary-fixed-dim:       154 52 18;
+  --color-on-tertiary-fixed:        255 255 255;
+  --color-on-tertiary-fixed-variant:255 255 255;
+
+  /* Error – red-600 for failed on light */
+  --color-error:                    220 38 38;
+  --color-on-error:                 255 255 255;
+  --color-error-container:          254 226 226;
+  --color-on-error-container:       127 29 29;
+
+  /* Borders */
+  --color-outline:                  148 163 184;
+  --color-outline-variant:          226 232 240;
+
+  /* Surface tint */
+  --color-surface-tint:             2 132 199;
+}
+
+/* ── Dark theme – from sample project ───────────────────────────────────── */
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces — sample: bg-dark=#0f1117, bg-light=#090c10, surface=#1a1d27, surface-border=#2a2d3a */
+  --color-background:               15 17 23;
+  --color-surface:                  15 17 23;
+  --color-surface-container-lowest: 9 12 16;
+  --color-surface-container-low:    26 29 39;
+  --color-surface-container:        30 34 48;
+  --color-surface-container-high:   42 45 58;
+  --color-surface-container-highest:51 55 72;
+  --color-surface-dim:              15 17 23;
+  --color-surface-bright:           35 39 58;
+  --color-surface-variant:          42 45 58;
+
+  /* Text — sample: foreground=#f8fafc, text-secondary=#9c9abc */
+  --color-on-background:            248 250 252;
+  --color-on-surface:               248 250 252;
+  --color-on-surface-variant:       156 154 188;
+  --color-inverse-surface:          248 250 252;
+  --color-inverse-on-surface:       15 17 23;
+
+  /* Primary – sample accent cyan #00adef */
+  --color-primary:                  0 173 239;
+  --color-on-primary:               0 48 71;
+  --color-primary-container:        0 90 122;
+  --color-on-primary-container:     179 232 255;
+  --color-primary-fixed:            0 173 239;
+  --color-primary-fixed-dim:        0 152 212;
+  --color-on-primary-fixed:         0 48 71;
+  --color-on-primary-fixed-variant: 0 48 71;
+  --color-inverse-primary:          2 132 199;
+
+  /* Secondary – violet-400 to complement cyan on dark */
+  --color-secondary:                167 139 250;
+  --color-on-secondary:             46 16 101;
+  --color-secondary-container:      76 29 149;
+  --color-on-secondary-container:   237 233 254;
+  --color-secondary-fixed:          167 139 250;
+  --color-secondary-fixed-dim:      139 92 246;
+  --color-on-secondary-fixed:       46 16 101;
+  --color-on-secondary-fixed-variant:46 16 101;
+
+  /* Tertiary – orange-400 for unstable/warning on dark */
+  --color-tertiary:                 251 146 60;
+  --color-on-tertiary:              124 45 18;
+  --color-tertiary-container:       194 65 12;
+  --color-on-tertiary-container:    254 215 170;
+  --color-tertiary-fixed:           251 146 60;
+  --color-tertiary-fixed-dim:       249 115 22;
+  --color-on-tertiary-fixed:        124 45 18;
+  --color-on-tertiary-fixed-variant:124 45 18;
+
+  /* Error – red-400 for failed on dark */
+  --color-error:                    248 113 113;
+  --color-on-error:                 127 29 29;
+  --color-error-container:          153 27 27;
+  --color-on-error-container:       254 202 202;
+
+  /* Borders */
+  --color-outline:                  74 77 98;
+  --color-outline-variant:          42 45 58;
+
+  /* Surface tint */
+  --color-surface-tint:             0 173 239;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-body;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-outline-variant));
+    border-radius: 9999px;
+  }
+}
+
+/* ── Components ─────────────────────────────────────────────────────────── */
+@layer components {
+  .nav-item-active {
+    @apply flex items-center gap-3 text-primary bg-primary/5 px-4 py-3 font-headline font-medium text-sm rounded-lg mx-0
+           transition-all duration-150;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 text-on-surface-variant px-4 py-3 font-headline font-medium text-sm rounded-lg mx-0
+           hover:bg-surface-container hover:text-on-surface
+           transition-all duration-150;
+  }
+
+  .ghost-border {
+    @apply border border-outline-variant/20;
+  }
+
+  .card {
+    @apply bg-surface-container-low rounded-xl;
+  }
+
+  .glass-panel {
+    background: rgb(var(--color-surface-container-highest) / 0.95);
+    border: 1px solid rgb(var(--color-outline-variant) / 0.6);
+    backdrop-filter: blur(20px);
+  }
+
+  .animate-in {
+    animation: fade-scale-in 150ms ease-out;
+  }
+
+  @keyframes fade-scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .status-bar-left {
+    @apply absolute inset-y-0 left-0 w-1 rounded-l-xl;
+  }
+}
+
+/* ── Material Symbols icon alignment ───────────────────────────────────── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  user-select: none;
+}

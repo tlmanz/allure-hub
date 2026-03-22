@@ -1,0 +1,9 @@
+.vscode
+node_modules
+target
+data
+allure-report
+dist
+backend/.env
+backend/policy.yaml
+.mailmap

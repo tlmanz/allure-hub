@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content Security Policy (L-24).
+         'unsafe-inline' on script-src is required by the two theme/font inline
+         scripts (L-25). Tighten to nonces if those are moved to external files. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'self';"
+    />
+    <title>allure-hub | Projects</title>
+    <!-- Blocking theme init: prevents flash of wrong theme on load -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('allure-hub-theme');
+          if (t === 'light') { document.documentElement.classList.remove('dark'); }
+          else if (t === 'dark') { document.documentElement.classList.add('dark'); }
+          else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.documentElement.classList.remove('dark');
+          } else {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) { document.documentElement.classList.add('dark'); }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Non-blocking font load (L-16): media=print + onload swap avoids render-blocking -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <!-- Hide Material Symbol ligatures until the icon font is ready.
+         The `fonts-loaded` class is added to <html> once the font resolves,
+         which via CSS cascade makes all current and future icon spans visible. -->
+    <style>
+      .material-symbols-outlined { visibility: hidden; }
+      html.fonts-loaded .material-symbols-outlined { visibility: visible; }
+    </style>
+    <script>
+      document.fonts.load('16px "Material Symbols Outlined"').then(function () {
+        document.documentElement.classList.add('fonts-loaded');
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
