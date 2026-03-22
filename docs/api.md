@@ -103,6 +103,95 @@ Assembles all chunks, extracts the zip, and triggers report generation.
 | `GET` | `/api/environments/{envId}/projects/{projectId}/reports/stats` | `view` | Aggregated pass/fail stats |
 | `DELETE` | `/api/environments/{envId}/projects/{projectId}/reports/{buildId}` | `manage` | Delete a report and its files |
 
+### Trigger report generation
+
+```
+POST /api/environments/{envId}/projects/{projectId}/reports
+```
+
+**Permission:** `upload`
+
+**Body (JSON):**
+
+```json
+{
+  "buildId": "2024-01-15-001",
+  "reportConfig": {
+    "name": "My Report",
+    "qualityGate": {
+      "rules": [
+        { "maxFailures": 2, "fastFail": true }
+      ]
+    },
+    "plugins": {
+      "allure2": {
+        "options": {
+          "reportName": "My Report",
+          "singleFile": false,
+          "reportLanguage": "en"
+        }
+      },
+      "dashboard": {
+        "options": {
+          "reportName": "My Dashboard",
+          "singleFile": false,
+          "reportLanguage": "en"
+        }
+      },
+      "csv": {
+        "options": {
+          "fileName": "allure-report.csv"
+        }
+      }
+    },
+    "variables": {
+      "env": "production"
+    }
+  }
+}
+```
+
+`buildId` must match the one used during upload. `reportConfig` is optional — if omitted, the server's default `allurerc.yml` is used.
+
+The `reportConfig` body maps directly to the [allurerc.yml schema](https://allurereport.org/docs/reference-allurerc/). The server merges your overrides on top of its base config. Two keys are always server-controlled and cannot be overridden: `output` (report output path) and `historyPath` (trend chart history).
+
+**Response (202):**
+
+```json
+{ "reportUrl": "/reports/env-1/project-1/2024-01-15-001/index.html" }
+```
+
+#### Sending `allurerc.yml` from CI
+
+If you manage report config as an `allurerc.yml` file in your repo, parse and inline it into the `reportConfig` field when calling this endpoint:
+
+=== "curl + yq"
+
+    ```bash
+    REPORT_CONFIG=$(yq -o=json '.' allurerc.yml)
+
+    curl -X POST \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"buildId\": \"$BUILD_ID\", \"reportConfig\": $REPORT_CONFIG}" \
+      https://your-host/api/environments/$ENV_ID/projects/$PROJECT_ID/reports
+    ```
+
+=== "Python"
+
+    ```python
+    import yaml, json, httpx
+
+    with open("allurerc.yml") as f:
+        report_config = yaml.safe_load(f)
+
+    httpx.post(
+        f"{BASE_URL}/api/environments/{env_id}/projects/{project_id}/reports",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"buildId": build_id, "reportConfig": report_config},
+    )
+    ```
+
 ## Upload sessions
 
 | Method | Path | Permission | Description |
