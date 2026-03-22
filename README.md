@@ -1,3 +1,10 @@
+[![CI](https://github.com/tlmanz/allure-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/tlmanz/allure-hub/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/tlmanz/allure-hub/actions/workflows/codequality.yml/badge.svg)](https://github.com/tlmanz/allure-hub/actions/workflows/codequality.yml)
+[![Coverage Status](https://coveralls.io/repos/github/tlmanz/allure-hub/badge.svg)](https://coveralls.io/github/tlmanz/allure-hub)
+![Open Issues](https://img.shields.io/github/issues/tlmanz/allure-hub)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tlmanz/allure-hub)](https://goreportcard.com/report/github.com/tlmanz/allure-hub)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/tlmanz/allure-hub)
+
 # allure-hub
 
 Self-hosted Allure 3 reporting platform — upload test results via API or UI, generate and browse reports across environments and projects, with Google OAuth and role-based access control.
