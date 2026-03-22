@@ -51,4 +51,3 @@ nav:
   - API Reference: api.md
   - Deployment:
       - Docker: deployment/docker.md
-      - Kubernetes: deployment/kubernetes.md
