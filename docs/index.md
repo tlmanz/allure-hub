@@ -9,6 +9,8 @@ Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and 
 - **Live upload tracking** — real-time progress via SSE, visible across all connected clients
 - **Allure 3 reports** — automatic history stitching for trend charts across builds
 - **Google OAuth + RBAC** — role-based access: `admin`, `developer`, `viewer`
+- **API key authentication** — issue scoped keys for CI pipelines; keys carry roles and are tracked with last-used timestamps
+- **Upload attribution** — every build and upload session records who triggered it (OAuth email or `apikey:<name>`)
 - **Single container** — Go binary + Allure CLI + React SPA in one image
 - **SQLite or PostgreSQL** — SQLite for single-node; Postgres for HA
 
@@ -21,11 +23,11 @@ Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and 
 ├─────────────────────────────────────────────────────────────┤
 │  Use-cases  (internal/usecase)                              │
 │  EnvironmentService · ProjectService · ReportService        │
-│  UploadService · EventBus                                   │
+│  UploadService · APIKeyService · EventBus                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Domain  (internal/domain)                                  │
-│  Environment · Project · Build · UploadSession entities     │
-│  Repository interfaces                                      │
+│  Environment · Project · Build · UploadSession             │
+│  APIKey · TrackedUser · Repository interfaces               │
 ├──────────────────┬──────────────────────────────────────────┤
 │  Repository      │  Storage          │  Allure              │
 │  SQLite/Postgres │  PVC filesystem   │  CLI wrapper         │

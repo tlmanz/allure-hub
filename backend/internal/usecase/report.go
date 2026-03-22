@@ -42,10 +42,18 @@ func (s *ReportService) SaveResultsStream(ctx context.Context, projectID, buildI
 // Generate stitches history, runs allure generate, persists the Build record,
 // and saves the new history back for the next run.
 func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID string, opts GenerateOptions) (string, error) {
-	resultsDir        := s.fs.ResultsDir(projectID, buildID)
-	reportDir         := s.fs.ReportDir(projectID, buildID)
+	log := s.log.With(zap.String("projectId", projectID), zap.String("buildId", buildID))
+	log.Debug("generate: starting")
+
+	resultsDir := s.fs.ResultsDir(projectID, buildID)
+	reportDir := s.fs.ReportDir(projectID, buildID)
 	persistentHistory := s.fs.HistoryDir(projectID)
-	historyFile       := s.fs.HistoryFile(projectID)
+	historyFile := s.fs.HistoryFile(projectID)
+	log.Debug("generate: paths resolved",
+		zap.String("resultsDir", resultsDir),
+		zap.String("reportDir", reportDir),
+		zap.String("historyFile", historyFile),
+	)
 
 	// Transition session to generating.
 	s.transitionSession(ctx, projectID, buildID, domain.PhaseGenerating, "")
@@ -53,29 +61,44 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	// Inject previous history so trend charts work.
 	historyDest := filepath.Join(resultsDir, "history")
 	if _, err := os.Stat(persistentHistory); err == nil {
+		log.Debug("generate: injecting history", zap.String("src", persistentHistory), zap.String("dst", historyDest))
 		if err := copyDir(persistentHistory, historyDest); err != nil {
 			s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, fmt.Sprintf("inject history: %v", err))
 			return "", fmt.Errorf("inject history: %w", err)
 		}
+	} else {
+		log.Debug("generate: no previous history found, skipping injection")
 	}
 
+	log.Debug("generate: invoking allure CLI", zap.String("resultsDir", resultsDir), zap.String("reportDir", reportDir))
 	configSnapshot, err := s.gen.Generate(resultsDir, reportDir, historyFile, opts)
 	if err != nil {
 		s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, err.Error())
 		return "", err
 	}
+	log.Debug("generate: allure CLI finished")
 
 	// Persist the new history for the next build.
 	newHistory := s.gen.HistoryDir(reportDir)
 	if _, err := os.Stat(newHistory); err == nil {
+		log.Debug("generate: saving new history", zap.String("src", newHistory), zap.String("dst", persistentHistory))
 		os.RemoveAll(persistentHistory)
 		if err := copyDir(newHistory, persistentHistory); err != nil {
 			return "", fmt.Errorf("save history: %w", err)
 		}
+	} else {
+		log.Debug("generate: no new history dir found in report output")
 	}
 
 	reportURL := fmt.Sprintf("/reports/%s/%s/index.html", projectID, buildID)
 	passed, failed, skipped, total, status := parseSummary(reportDir)
+	log.Debug("generate: summary parsed", zap.Int("passed", passed), zap.Int("failed", failed), zap.Int("total", total), zap.String("status", status))
+
+	// Carry the uploader identity from the upload session onto the build record.
+	uploadedBy := ""
+	if sess, _ := s.sessionRepo.GetByBuild(ctx, projectID, buildID); sess != nil {
+		uploadedBy = sess.UploadedBy
+	}
 
 	build := &domain.Build{
 		ID:             uuid.New().String(),
@@ -88,6 +111,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 		Skipped:        skipped,
 		Total:          total,
 		Status:         status,
+		UploadedBy:     uploadedBy,
 		ConfigSnapshot: configSnapshot,
 	}
 	if err := s.buildRepo.Save(ctx, build); err != nil {

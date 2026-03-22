@@ -9,7 +9,9 @@ import EnvironmentsPage from './pages/EnvironmentsPage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import UploadsPage from './pages/UploadsPage'
+import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
+import ProfilePage from './pages/ProfilePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -38,6 +40,8 @@ export default function App() {
                         <Route path="/environments/:envId" element={<ProjectsPage />} />
                         <Route path="/environments/:envId/projects/:projectId" element={<ProjectDetailPage />} />
                         <Route path="/uploads" element={<UploadsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
                       </Routes>
                     </Layout>
                     <UploadDrawer />

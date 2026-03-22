@@ -228,6 +228,67 @@ Phases: `uploading` → `assembling` → `generating` → `done` / `failed`
 }
 ```
 
+## Settings
+
+Settings endpoints require an active **session** (OAuth login). API keys cannot be used to manage settings.
+
+### API Keys
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/settings/apikeys` | `manage` | List all API keys (hashes never returned) |
+| `POST` | `/api/settings/apikeys` | `manage` | Create a new API key |
+| `DELETE` | `/api/settings/apikeys/{id}` | `manage` | Revoke or permanently delete a key |
+
+#### Create API key
+
+```
+POST /api/settings/apikeys
+```
+
+**Body (JSON):**
+
+```json
+{
+  "name": "ci-pipeline",
+  "role": "developer"
+}
+```
+
+`role` must be one of `admin`, `developer`, or `viewer`.
+
+**Response (201):**
+
+```json
+{
+  "id": "01HXY...",
+  "name": "ci-pipeline",
+  "role": "developer",
+  "key": "ah_a3f9..."
+}
+```
+
+!!! warning "Save the key now"
+    The plaintext key is returned **once** at creation time. The server stores only its SHA-256 hash and cannot recover the original value.
+
+#### Delete or revoke API key
+
+```
+DELETE /api/settings/apikeys/{id}
+DELETE /api/settings/apikeys/{id}?action=delete
+```
+
+- Default (`action` omitted or `action=revoke`): soft-delete — key is marked inactive but the record is retained.
+- `action=delete`: permanently removes the key record.
+
+### Users
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/settings/users` | `manage` | List all OAuth users who have signed in |
+
+Returns users ordered by most recent login. Each entry includes `email`, `name`, `avatarUrl`, `provider`, `role`, `firstLoginAt`, and `lastLoginAt`.
+
 ## Auth endpoints
 
 | Method | Path | Description |

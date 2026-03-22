@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tlmanz/allure-hub/internal/domain"
+	"go.uber.org/zap"
 )
 
 // UploadService orchestrates chunked-upload sessions.
@@ -19,36 +21,31 @@ type UploadService struct {
 	reportSvc       *ReportService
 	fs              FileStorage
 	sessionRepo     domain.UploadSessionRepository
+	envRepo         domain.EnvironmentRepository
+	projectRepo     domain.ProjectRepository
 	bus             *EventBus
 	assembleTempDir string // directory for assembled zip temp file; defaults to chunk parent dir
+	log             *zap.Logger
 }
 
-func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, bus *EventBus, assembleTempDir string) *UploadService {
+func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, envRepo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, bus *EventBus, assembleTempDir string, log *zap.Logger) *UploadService {
 	return &UploadService{
 		reportSvc:       reportSvc,
 		fs:              fs,
 		sessionRepo:     sessionRepo,
+		envRepo:         envRepo,
+		projectRepo:     projectRepo,
 		bus:             bus,
 		assembleTempDir: assembleTempDir,
+		log:             log,
 	}
 }
 
 // InitUpload creates the staging directory, persists a new session, and returns the upload ID.
-func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildID, fileName string, totalSize int64, totalChunks int) (string, error) {
-	uploadID := uuid.New().String()
-	if err := os.MkdirAll(s.fs.ChunkDir(projectID, uploadID), 0755); err != nil {
-		return "", err
-	}
-	meta := UploadMeta{
-		UploadID:    uploadID,
-		BuildID:     buildID,
-		TotalSize:   totalSize,
-		TotalChunks: totalChunks,
-	}
-	if err := s.fs.WriteUploadMeta(projectID, uploadID, meta); err != nil {
-		return "", err
-	}
+func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildID, fileName, uploadedBy string, totalSize int64, totalChunks int) (string, error) {
+	log := s.log.With(zap.String("projectId", projectID), zap.String("buildId", buildID), zap.String("envId", envID))
 
+	uploadID := uuid.New().String()
 	sess := &domain.UploadSession{
 		ID:          uuid.New().String(),
 		UploadID:    uploadID,
@@ -58,16 +55,38 @@ func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildI
 		FileName:    fileName,
 		TotalSize:   totalSize,
 		TotalChunks: totalChunks,
+		UploadedBy:  uploadedBy,
 		Phase:       domain.PhaseUploading,
 		StartedAt:   time.Now().UTC(),
 	}
-	if err := s.sessionRepo.Create(ctx, sess); err != nil {
-		// Non-fatal: tracking failure must not block the upload itself.
-		_ = err
-	} else {
+	if err := s.sessionRepo.Create(ctx, sess); err == nil {
 		s.bus.Publish(sess)
 	}
 
+	// Validate after creating the session so a failed session is always
+	// persisted to the DB and visible in the frontend via SSE.
+	if err := s.validateEnvAndProject(ctx, envID, projectID); err != nil {
+		log.Debug("init upload: validation failed", zap.Error(err))
+		s.failSessionByID(ctx, sess, err.Error())
+		return "", err
+	}
+
+	if err := os.MkdirAll(s.fs.ChunkDir(projectID, uploadID), 0755); err != nil {
+		s.failSessionByID(ctx, sess, fmt.Sprintf("create chunk dir: %v", err))
+		return "", err
+	}
+	meta := UploadMeta{
+		UploadID:    uploadID,
+		BuildID:     buildID,
+		TotalSize:   totalSize,
+		TotalChunks: totalChunks,
+	}
+	if err := s.fs.WriteUploadMeta(projectID, uploadID, meta); err != nil {
+		s.failSessionByID(ctx, sess, fmt.Sprintf("write upload meta: %v", err))
+		return "", err
+	}
+
+	log.Debug("init upload: session created", zap.String("uploadId", uploadID), zap.Int("totalChunks", totalChunks))
 	return uploadID, nil
 }
 
@@ -107,6 +126,9 @@ func (s *UploadService) ChunksReceived(ctx context.Context, projectID, uploadID 
 
 // AssembleUpload concatenates all chunks into a zip and extracts to results/.
 func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID string) error {
+	log := s.log.With(zap.String("projectId", projectID), zap.String("uploadId", uploadID))
+	log.Debug("assemble: starting")
+
 	// Transition to assembling.
 	if sess, _ := s.sessionRepo.GetByUploadID(ctx, uploadID); sess != nil {
 		sess.Phase = domain.PhaseAssembling
@@ -120,6 +142,7 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 		s.failSession(ctx, uploadID, fmt.Sprintf("read upload meta: %v", err))
 		return fmt.Errorf("read upload meta: %w", err)
 	}
+	log.Debug("assemble: meta loaded", zap.String("buildId", meta.BuildID), zap.Int("totalChunks", meta.TotalChunks), zap.Int64("totalSize", meta.TotalSize))
 
 	chunkDir := s.fs.ChunkDir(projectID, uploadID)
 	entries, err := os.ReadDir(chunkDir)
@@ -144,6 +167,7 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 		chunks = append(chunks, indexedEntry{filepath.Join(chunkDir, e.Name()), idx})
 	}
 	sort.Slice(chunks, func(i, j int) bool { return chunks[i].index < chunks[j].index })
+	log.Debug("assemble: chunks discovered", zap.Int("found", len(chunks)), zap.Int("expected", meta.TotalChunks))
 
 	if len(chunks) != meta.TotalChunks {
 		msg := fmt.Sprintf("expected %d chunks, have %d", meta.TotalChunks, len(chunks))
@@ -166,8 +190,10 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 	}
 	defer os.Remove(assembled.Name())
 	defer assembled.Close()
+	log.Debug("assemble: temp file created", zap.String("path", assembled.Name()))
 
 	for _, c := range chunks {
+		log.Debug("assemble: copying chunk", zap.Int("index", c.index))
 		cf, err := os.Open(c.path)
 		if err != nil {
 			s.failSession(ctx, uploadID, fmt.Sprintf("open chunk %d: %v", c.index, err))
@@ -180,18 +206,23 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 			return fmt.Errorf("copy chunk %d: %w", c.index, err)
 		}
 	}
+	log.Debug("assemble: all chunks concatenated, starting unzip")
 
 	assembled.Seek(0, 0)
 	if err := s.reportSvc.SaveResultsStream(ctx, projectID, meta.BuildID, assembled); err != nil {
 		s.failSession(ctx, uploadID, fmt.Sprintf("unzip assembled: %v", err))
 		return fmt.Errorf("unzip assembled: %w", err)
 	}
+	log.Debug("assemble: unzip complete, cleaning chunk dir")
 	return os.RemoveAll(chunkDir)
 }
 
 // TrackStreamUpload creates a session for a single-shot streaming upload,
 // delegates to ReportService.SaveResultsStream, and marks the session done/failed.
-func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID, buildID, fileName string, totalSize int64, body io.Reader) error {
+func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID, buildID, fileName, uploadedBy string, totalSize int64, body io.Reader) error {
+	log := s.log.With(zap.String("projectId", projectID), zap.String("buildId", buildID), zap.String("envId", envID))
+	log.Debug("stream upload: starting", zap.String("fileName", fileName), zap.Int64("totalSize", totalSize))
+
 	sessID := uuid.New().String()
 	sess := &domain.UploadSession{
 		ID:          sessID,
@@ -202,6 +233,7 @@ func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID,
 		FileName:    fileName,
 		TotalSize:   totalSize,
 		TotalChunks: 1,
+		UploadedBy:  uploadedBy,
 		Phase:       domain.PhaseUploading,
 		StartedAt:   time.Now().UTC(),
 	}
@@ -209,18 +241,29 @@ func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID,
 		s.bus.Publish(sess)
 	}
 
-	if err := s.reportSvc.SaveResultsStream(ctx, projectID, buildID, body); err != nil {
+	if err := s.validateEnvAndProject(ctx, envID, projectID); err != nil {
 		s.failSessionByID(ctx, sess, err.Error())
 		return err
 	}
+	log.Debug("stream upload: env+project validated, starting save")
 
+	if err := s.reportSvc.SaveResultsStream(ctx, projectID, buildID, body); err != nil {
+		log.Debug("stream upload: save failed", zap.Error(err))
+		s.failSessionByID(ctx, sess, err.Error())
+		return err
+	}
+	log.Debug("stream upload: save complete, transitioning to assembling")
+
+	// Use background context — the request context may be cancelled if the
+	// client closed the connection, but we still need to persist the final state.
 	now := time.Now().UTC()
 	sess.Phase = domain.PhaseAssembling
 	sess.ReceivedChunks = 1
 	sess.CompletedAt = &now
-	if err := s.sessionRepo.Update(ctx, sess); err == nil {
+	if err := s.sessionRepo.Update(context.Background(), sess); err == nil {
 		s.bus.Publish(sess)
 	}
+	log.Debug("stream upload: session transitioned to assembling, awaiting generate call")
 	return nil
 }
 
@@ -241,6 +284,24 @@ func (s *UploadService) DeleteSession(ctx context.Context, id string) error {
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
+// validateEnvAndProject checks that the environment and project both exist.
+// Returns a descriptive error (wrapping the domain sentinel) if either is missing.
+func (s *UploadService) validateEnvAndProject(ctx context.Context, envID, projectID string) error {
+	if _, err := s.envRepo.Get(ctx, envID); err != nil {
+		if errors.Is(err, domain.ErrEnvironmentNotFound) {
+			return fmt.Errorf("environment %q not found: %w", envID, domain.ErrEnvironmentNotFound)
+		}
+		return fmt.Errorf("look up environment: %w", err)
+	}
+	if _, err := s.projectRepo.Get(ctx, envID, projectID); err != nil {
+		if errors.Is(err, domain.ErrProjectNotFound) {
+			return fmt.Errorf("project %q not found in environment %q: %w", projectID, envID, domain.ErrProjectNotFound)
+		}
+		return fmt.Errorf("look up project: %w", err)
+	}
+	return nil
+}
+
 func (s *UploadService) failSession(ctx context.Context, uploadID, msg string) {
 	if sess, _ := s.sessionRepo.GetByUploadID(ctx, uploadID); sess != nil {
 		s.failSessionByID(ctx, sess, msg)
@@ -253,7 +314,10 @@ func (s *UploadService) failSessionByID(ctx context.Context, sess *domain.Upload
 	sess.Phase = domain.PhaseFailed
 	sess.Error = msg
 	sess.CompletedAt = &now
-	if err := s.sessionRepo.Update(ctx, sess); err == nil {
+	// Use a background context so a cancelled request context (client disconnect)
+	// does not silently prevent the session from being marked as failed.
+	bg := context.Background()
+	if err := s.sessionRepo.Update(bg, sess); err == nil {
 		s.bus.Publish(sess)
 	}
 }

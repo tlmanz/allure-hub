@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tlmanz/allure-hub/internal/domain"
-	"github.com/tlmanz/allure-hub/internal/usecase"
 	"github.com/tlmanz/allure-hub/internal/storage"
+	"github.com/tlmanz/allure-hub/internal/usecase"
 )
 
 // maxJSONBytes caps the body size for small JSON request payloads (1 MB).
@@ -50,9 +50,13 @@ func (h *ReportHandler) UploadResultsStream(w http.ResponseWriter, r *http.Reque
 	}
 	totalSize, _ := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
 	body := http.MaxBytesReader(w, r.Body, h.maxUploadBytes)
-	if err := h.uploadSvc.TrackStreamUpload(r.Context(), envID, projectID, buildID, fileName, totalSize, body); err != nil {
+	if err := h.uploadSvc.TrackStreamUpload(r.Context(), envID, projectID, buildID, fileName, callerIdentity(r), totalSize, body); err != nil {
 		if errors.Is(err, storage.ErrUploadTooLarge) {
 			http.Error(w, "upload exceeds maximum allowed size", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if errors.Is(err, domain.ErrEnvironmentNotFound) || errors.Is(err, domain.ErrProjectNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		h.log.Error("upload results stream failed", zap.String("projectId", projectID), zap.String("buildId", buildID), zap.Error(err))
@@ -93,8 +97,12 @@ func (h *ReportHandler) InitChunkedUpload(w http.ResponseWriter, r *http.Request
 	if fileName == "" {
 		fileName = "results.zip"
 	}
-	uploadID, err := h.uploadSvc.InitUpload(r.Context(), envID, projectID, req.BuildID, fileName, req.TotalSize, req.TotalChunks)
+	uploadID, err := h.uploadSvc.InitUpload(r.Context(), envID, projectID, req.BuildID, fileName, callerIdentity(r), req.TotalSize, req.TotalChunks)
 	if err != nil {
+		if errors.Is(err, domain.ErrEnvironmentNotFound) || errors.Is(err, domain.ErrProjectNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		h.log.Error("init chunked upload failed", zap.String("projectId", projectID), zap.Error(err))
 		http.Error(w, "failed to init upload", http.StatusInternalServerError)
 		return

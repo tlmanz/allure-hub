@@ -1,6 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { useUI } from '../context/UIContext'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { APP_NAME } from '../design-system/tokens'
 import { useUpload } from '../context/UploadContext'
@@ -16,13 +15,22 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Environments', to: '/', matchPrefix: '/environments' },
   { label: 'Uploads', to: '/uploads' },
+  { label: 'Settings', to: '/settings' },
 ]
 
-const ACTIVE_CLS = 'px-3 py-1.5 rounded text-sm font-medium font-headline bg-primary/10 text-primary border border-primary/20 transition-colors'
-const INACTIVE_CLS = 'px-3 py-1.5 rounded text-sm font-medium font-headline text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors'
+const ACTIVE_CLS = 'px-3.5 py-1.5 rounded-lg text-[15px] font-semibold font-headline bg-primary/10 text-primary border border-primary/20 transition-colors'
+const INACTIVE_CLS = 'px-3.5 py-1.5 rounded-lg text-[15px] font-semibold font-headline text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors'
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
 
 const NavBar: React.FC = React.memo(() => {
-  const { openNewEnvironmentModal, openNewProjectModal } = useUI()
   const { theme, toggleTheme } = useTheme()
   const { pathname } = useLocation()
   const { sessions, drawerOpen, openDrawer, closeDrawer } = useUpload()
@@ -30,6 +38,18 @@ const NavBar: React.FC = React.memo(() => {
   const { user, logout, can } = useAuth()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const now = useClock()
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [userMenuOpen])
 
   // Memoize all pathname-derived values so regex/filter work only reruns when
   // pathname or sessions actually change (M-20).
@@ -46,38 +66,9 @@ const NavBar: React.FC = React.memo(() => {
     [sessions, currentProjectId],
   )
 
-  const createButton = useMemo((): React.ReactNode => {
-    if (!can('manage')) return null
-    if (pathname === '/') {
-      return (
-        <button
-          onClick={openNewEnvironmentModal}
-          className="bg-primary text-on-primary font-headline font-bold text-sm px-4 py-1.5 rounded-lg flex items-center gap-1.5 hover:brightness-110 active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          New Environment
-        </button>
-      )
-    }
-    const envProjectMatch = pathname.match(/^\/environments\/([^/]+)$/)
-    if (envProjectMatch) {
-      const envId = envProjectMatch[1]
-      return (
-        <button
-          onClick={() => openNewProjectModal(envId)}
-          className="bg-primary text-on-primary font-headline font-bold text-sm px-4 py-1.5 rounded-lg flex items-center gap-1.5 hover:brightness-110 active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          New Project
-        </button>
-      )
-    }
-    return null
-  }, [pathname, openNewEnvironmentModal, openNewProjectModal, can])
-
   return (
     <nav
-      className="sticky top-0 z-30 h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 flex-shrink-0"
       style={{
         background: 'rgb(var(--color-surface-container-lowest))',
         borderBottom: '1px solid rgb(var(--color-outline-variant) / 0.4)',
@@ -85,12 +76,13 @@ const NavBar: React.FC = React.memo(() => {
     >
       {/* Left: brand + nav links */}
       <div className="flex items-center gap-8">
-        <span className="text-lg font-black text-primary tracking-tighter font-headline leading-none select-none">
+        <span className="text-xl font-black text-primary tracking-tighter font-headline leading-none select-none">
           {APP_NAME}
         </span>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {NAV_ITEMS.map(({ label, to, matchPrefix }) => {
+            if (label === 'Settings' && !can('manage')) return null
             const isActive =
               pathname === to ||
               (matchPrefix !== undefined && pathname.startsWith(matchPrefix))
@@ -115,8 +107,17 @@ const NavBar: React.FC = React.memo(() => {
         </div>
       </div>
 
-      {/* Right: upload activity toggle + theme toggle + create button */}
+      {/* Right: clock + upload activity toggle + theme toggle + create button */}
       <div className="flex items-center gap-2">
+        {/* Live clock */}
+        <div className="flex flex-col items-end mr-1 select-none">
+          <span className="text-[16px] font-headline font-bold text-on-surface tabular-nums leading-tight">
+            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+          <span className="text-[11px] font-label text-on-surface-variant leading-tight">
+            {now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
+        </div>
         {/* Health status indicator */}
         <div
           title={
@@ -125,7 +126,7 @@ const NavBar: React.FC = React.memo(() => {
             : health.status === 'degraded' ? `Degraded · DB: ${health.db}`
             : 'Server unreachable'
           }
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-label font-semibold border transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-label font-semibold border transition-colors"
           style={{
             background: health.status === 'ok' ? 'rgb(var(--md-sys-color-tertiary, 0 137 123) / 0.08)'
               : health.status === 'checking' ? 'rgb(var(--color-surface-container-high, 200 200 200) / 0.5)'
@@ -149,7 +150,7 @@ const NavBar: React.FC = React.memo(() => {
         {currentProjectId && (
           <button
             onClick={() => drawerOpen ? closeDrawer() : openDrawer()}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium font-headline transition-colors
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[15px] font-medium font-headline transition-colors
               ${drawerOpen
                 ? 'bg-primary/10 text-primary border border-primary/20'
                 : 'text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5'
@@ -157,7 +158,7 @@ const NavBar: React.FC = React.memo(() => {
             aria-label="Toggle upload activity"
             title="Upload activity"
           >
-            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+            <span className="material-symbols-outlined text-[20px]">upload_file</span>
             Activity
             {activeCount > 0 && (
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -171,7 +172,7 @@ const NavBar: React.FC = React.memo(() => {
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
         >
-          <span className="material-symbols-outlined text-[18px]">
+          <span className="material-symbols-outlined text-[20px]">
             {theme === 'dark' ? 'light_mode' : 'dark_mode'}
           </span>
         </button>
@@ -185,14 +186,14 @@ const NavBar: React.FC = React.memo(() => {
               aria-label="User menu"
             >
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.name} className="w-7 h-7 rounded-full" referrerPolicy="no-referrer" />
+                <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
               ) : (
-                <span className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold font-headline">
+                <span className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold font-headline">
                   {user.name?.[0]?.toUpperCase() ?? user.email[0].toUpperCase()}
                 </span>
               )}
-              <span className="text-sm font-medium font-headline text-on-surface hidden sm:block">{user.name || user.email}</span>
-              <span className="material-symbols-outlined text-[14px] text-on-surface-variant">expand_more</span>
+              <span className="text-[15px] font-medium font-headline text-on-surface hidden sm:block">{user.name || user.email}</span>
+              <span className="material-symbols-outlined text-[15px] text-on-surface-variant">expand_more</span>
             </button>
 
             {userMenuOpen && (
@@ -208,6 +209,15 @@ const NavBar: React.FC = React.memo(() => {
                   <p className="text-[11px] text-on-surface-variant truncate">{user.email}</p>
                   <span className="inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary capitalize">{user.role}</span>
                 </div>
+                <Link
+                  to="/profile"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+                  View profile
+                </Link>
+                <div className="my-1 border-t" style={{ borderColor: 'rgb(var(--color-outline-variant) / 0.3)' }} />
                 <button
                   onClick={() => { setUserMenuOpen(false); logout() }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -220,7 +230,6 @@ const NavBar: React.FC = React.memo(() => {
           </div>
         )}
 
-        {createButton}
       </div>
     </nav>
   )

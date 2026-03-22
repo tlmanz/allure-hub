@@ -2,9 +2,12 @@
 package transport
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -12,7 +15,7 @@ import (
 	"github.com/tlmanz/allure-hub/internal/usecase"
 	"github.com/tlmanz/allure-hub/internal/transport/handler"
 	"github.com/tlmanz/allure-hub/internal/transport/middleware"
-	"github.com/tlmanz/allure-hub/pkg/authkit"
+	localauth "github.com/tlmanz/allure-hub/pkg/authkit"
 	kit "github.com/tlmanz/authkit"
 )
 
@@ -41,6 +44,8 @@ func NewRouter(
 	sessionRepo domain.UploadSessionRepository,
 	bus *usecase.EventBus,
 	auth *kit.Auth,
+	apiKeySvc *usecase.APIKeyService,
+	userRepo domain.TrackedUserRepository,
 	rcfg RouterConfig,
 	log *zap.Logger,
 ) http.Handler {
@@ -51,51 +56,62 @@ func NewRouter(
 	rh := handler.NewReportHandler(reportSvc, uploadSvc, rcfg.MaxChunkBytes, rcfg.MaxUploadBytes, log)
 	uh := handler.NewUploadSessionHandler(sessionRepo, uploadSvc, bus, log)
 	hh := handler.NewHealthHandler(db)
+	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, log)
 
-	// Auth routes (no session required)
+	// Auth routes — OAuth flow (no API key auth here)
 	mux.HandleFunc("GET /auth/{provider}", auth.BeginAuth)
 	mux.HandleFunc("GET /auth/{provider}/callback", auth.Callback)
 	mux.HandleFunc("POST /auth/logout", auth.Logout)
-	mux.HandleFunc("GET /auth/me", auth.Me)
+	// /auth/me: session-only, track the user on access
+	mux.Handle("GET /auth/me", auth.RequireSessionAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u := kit.UserFromCtx(r.Context())
+		go upsertTrackedUser(context.Background(), userRepo, u)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(u)
+	})))
 
 	// Environments
-	mux.Handle("GET /api/environments", auth.RequireAuth(http.HandlerFunc(eh.List)))
-	mux.Handle("POST /api/environments", auth.Require(authkit.PermManage)(http.HandlerFunc(eh.Create)))
-	mux.Handle("PATCH /api/environments/{envId}", auth.Require(authkit.PermManage)(http.HandlerFunc(eh.Update)))
-	mux.Handle("DELETE /api/environments/{envId}", auth.Require(authkit.PermManage)(http.HandlerFunc(eh.Delete)))
+	// GET  — API keys allowed (read-only dashboards, CI status checks)
+	// POST/PATCH/DELETE — session-only management
+	mux.Handle("GET /api/environments", auth.Require(localauth.PermView)(http.HandlerFunc(eh.List)))
+	mux.Handle("POST /api/environments", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Create)))
+	mux.Handle("PATCH /api/environments/{envId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Update)))
+	mux.Handle("DELETE /api/environments/{envId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Delete)))
 
-	// Projects (scoped by environment)
-	mux.Handle("GET /api/environments/{envId}/projects", auth.RequireAuth(http.HandlerFunc(ph.List)))
-	mux.Handle("POST /api/environments/{envId}/projects", auth.Require(authkit.PermManage)(http.HandlerFunc(ph.Create)))
-	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}", auth.Require(authkit.PermManage)(http.HandlerFunc(ph.Delete)))
+	// Projects
+	mux.Handle("GET /api/environments/{envId}/projects", auth.Require(localauth.PermView)(http.HandlerFunc(ph.List)))
+	mux.Handle("POST /api/environments/{envId}/projects", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(ph.Create)))
+	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(ph.Delete)))
 
-	// Results — Strategy A: single streaming upload
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/results", auth.Require(authkit.PermUpload)(http.HandlerFunc(rh.UploadResultsStream)))
-
-	// Results — Strategy B: chunked upload
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads", auth.Require(authkit.PermUpload)(http.HandlerFunc(rh.InitChunkedUpload)))
-	mux.Handle("PUT /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}", auth.Require(authkit.PermUpload)(http.HandlerFunc(rh.UploadChunk)))
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}/complete", auth.Require(authkit.PermUpload)(http.HandlerFunc(rh.CompleteChunkedUpload)))
+	// Results upload — API keys allowed (primary CI/CD path)
+	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/results", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadResultsStream)))
+	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.InitChunkedUpload)))
+	mux.Handle("PUT /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadChunk)))
+	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}/complete", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.CompleteChunkedUpload)))
 
 	// Report generation + listing
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/reports", auth.Require(authkit.PermUpload)(http.HandlerFunc(rh.GenerateReport)))
-	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports", auth.RequireAuth(http.HandlerFunc(rh.ListReports)))
-	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports/stats", auth.RequireAuth(http.HandlerFunc(rh.ReportStats)))
-	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}/reports/{buildId}", auth.Require(authkit.PermManage)(http.HandlerFunc(rh.DeleteReport)))
+	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/reports", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.GenerateReport)))
+	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports", auth.Require(localauth.PermView)(http.HandlerFunc(rh.ListReports)))
+	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports/stats", auth.Require(localauth.PermView)(http.HandlerFunc(rh.ReportStats)))
+	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}/reports/{buildId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(rh.DeleteReport)))
 
-	// Upload session tracking (all uploads across all projects/envs)
-	mux.Handle("GET /api/uploads", auth.RequireAuth(http.HandlerFunc(uh.List)))
-	mux.Handle("GET /api/uploads/stream", auth.RequireAuth(http.HandlerFunc(uh.Stream)))
-	mux.Handle("DELETE /api/uploads/{id}", auth.Require(authkit.PermManage)(http.HandlerFunc(uh.Delete)))
+	// Upload session tracking
+	mux.Handle("GET /api/uploads", auth.Require(localauth.PermView)(http.HandlerFunc(uh.List)))
+	mux.Handle("GET /api/uploads/stream", auth.Require(localauth.PermView)(http.HandlerFunc(uh.Stream)))
+	mux.Handle("DELETE /api/uploads/{id}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(uh.Delete)))
 
-	// Health + version (unprotected — needed for monitoring)
+	// Settings — session-only (API keys must not manage themselves)
+	mux.Handle("GET /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListAPIKeys)))
+	mux.Handle("POST /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.CreateAPIKey)))
+	mux.Handle("DELETE /api/settings/apikeys/{id}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.RevokeAPIKey)))
+	mux.Handle("GET /api/settings/users", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListUsers)))
+
+	// Health + version (unprotected)
 	mux.HandleFunc("GET /api/healthz", hh.Check)
 	mux.HandleFunc("GET /api/version", hh.Info)
 
-	// Serve generated Allure report HTML from the data directory.
+	// Serve generated Allure reports and the compiled SPA.
 	mux.Handle("/reports/", reportsHandler(rcfg.DataDir))
-
-	// Serve the compiled frontend SPA (catch-all, must be last).
 	if rcfg.WebDir != "" {
 		mux.Handle("/", spaHandler(rcfg.WebDir))
 	}
@@ -109,6 +125,23 @@ func NewRouter(
 	)
 }
 
+// upsertTrackedUser persists an OAuth user's login record asynchronously.
+func upsertTrackedUser(ctx context.Context, repo domain.TrackedUserRepository, u *kit.User) {
+	if repo == nil || u == nil {
+		return
+	}
+	now := time.Now().UTC()
+	_ = repo.Upsert(ctx, &domain.TrackedUser{
+		Email:        u.Email,
+		Name:         u.Name,
+		AvatarURL:    u.AvatarURL,
+		Provider:     u.Provider,
+		Role:         u.Role,
+		FirstLoginAt: now,
+		LastLoginAt:  now,
+	})
+}
+
 func reportsHandler(dataDir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimPrefix(r.URL.Path, "/reports/")
@@ -118,8 +151,6 @@ func reportsHandler(dataDir string) http.Handler {
 			return
 		}
 
-		// Prevent path traversal: resolve the final path and ensure it stays
-		// within the expected reports directory.
 		target := filepath.Join(dataDir, parts[0], "reports", parts[1])
 		absTarget, err := filepath.Abs(target)
 		if err != nil {
@@ -136,10 +167,6 @@ func reportsHandler(dataDir string) http.Handler {
 			return
 		}
 
-		// Security headers for generated Allure report HTML.
-		// Allure bundles are pre-compiled SPAs that require 'unsafe-inline' and
-		// 'unsafe-eval' — these cannot be removed without breaking the reports.
-		// We tighten every other directive to minimise the attack surface.
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Content-Security-Policy",
@@ -151,7 +178,6 @@ func reportsHandler(dataDir string) http.Handler {
 				"frame-ancestors 'self';",
 		)
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-
 		http.ServeFile(w, r, absTarget)
 	})
 }

@@ -31,12 +31,17 @@ func Logger(log *zap.Logger) func(http.Handler) http.Handler {
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			start := time.Now()
 			next.ServeHTTP(rec, r)
-			log.Info("request",
+			fields := []zap.Field{
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.Int("status", rec.status),
 				zap.Duration("duration", time.Since(start)),
-			)
+			}
+			if r.URL.Path == "/api/healthz" {
+				log.Debug("request", fields...)
+			} else {
+				log.Info("request", fields...)
+			}
 		})
 	}
 }

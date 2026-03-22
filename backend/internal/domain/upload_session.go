@@ -28,6 +28,7 @@ type UploadSession struct {
 	Phase          UploadPhase `json:"phase"`
 	FailedAtPhase  UploadPhase `json:"failedAtPhase,omitempty"`
 	Error          string      `json:"error,omitempty"`
+	UploadedBy     string      `json:"uploadedBy"`
 	StartedAt      time.Time   `json:"startedAt"`
 	CompletedAt    *time.Time  `json:"completedAt,omitempty"`
 	ReportURL      string      `json:"reportUrl,omitempty"`

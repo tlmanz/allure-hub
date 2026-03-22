@@ -58,12 +58,12 @@ export default function ProjectsPage() {
       <div className="flex items-center gap-3 mb-2">
         <Link
           to="/"
-          className="p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors rounded-lg"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors rounded-lg"
           aria-label="Back to Environments"
         >
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          <span className="text-xs font-label">Environments</span>
         </Link>
-        <span className="text-xs font-label text-on-surface-variant">Environments</span>
         <span className="text-xs font-label text-on-surface-variant opacity-40">/</span>
         <span className="text-xs font-label text-on-surface">{envName}</span>
       </div>

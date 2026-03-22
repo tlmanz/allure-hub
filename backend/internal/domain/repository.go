@@ -35,6 +35,7 @@ type BuildRepository interface {
 	LatestByProject(ctx context.Context, projectID string) (*Build, error)
 	StatsForProject(ctx context.Context, projectID string) (*BuildStats, error)
 	Delete(ctx context.Context, projectID, buildID string) error
+	DeleteByProject(ctx context.Context, projectID string) error
 }
 
 // UploadSessionRepository is the persistence contract for UploadSession aggregates.
@@ -52,4 +53,20 @@ type UploadSessionRepository interface {
 	Delete(ctx context.Context, id string) error
 	DeleteByProject(ctx context.Context, projectID string) error
 	DeleteByEnv(ctx context.Context, envID string) error
+}
+
+// TrackedUserRepository tracks OAuth users who have logged into allure-hub.
+type TrackedUserRepository interface {
+	Upsert(ctx context.Context, u *TrackedUser) error
+	List(ctx context.Context) ([]*TrackedUser, error)
+}
+
+// APIKeyRepository is the persistence contract for API keys.
+type APIKeyRepository interface {
+	Create(ctx context.Context, k *APIKey) error
+	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
+	List(ctx context.Context) ([]*APIKey, error)
+	UpdateLastUsed(ctx context.Context, id string) error
+	Revoke(ctx context.Context, id string) error
+	Delete(ctx context.Context, id string) error
 }

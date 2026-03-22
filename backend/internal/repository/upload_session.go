@@ -19,11 +19,11 @@ func (r *UploadSessionRepo) Create(ctx context.Context, s *domain.UploadSession)
 		r.db.Ph(`INSERT INTO upload_sessions
 		  (id, upload_id, build_id, project_id, env_id, file_name,
 		   total_size, total_chunks, received_chunks, phase, failed_at_phase, error,
-		   started_at, completed_at, report_url, passed, failed, skipped, total)
-		  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		   uploaded_by, started_at, completed_at, report_url, passed, failed, skipped, total)
+		  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		s.ID, s.UploadID, s.BuildID, s.ProjectID, s.EnvID, s.FileName,
 		s.TotalSize, s.TotalChunks, s.ReceivedChunks, string(s.Phase), string(s.FailedAtPhase), s.Error,
-		s.StartedAt.UTC().Format(time.RFC3339), nullTime(s.CompletedAt),
+		s.UploadedBy, s.StartedAt.UTC().Format(time.RFC3339), nullTime(s.CompletedAt),
 		s.ReportURL, s.Passed, s.Failed, s.Skipped, s.Total,
 	)
 	if err != nil {
@@ -37,12 +37,12 @@ func (r *UploadSessionRepo) Update(ctx context.Context, s *domain.UploadSession)
 		r.db.Ph(`UPDATE upload_sessions SET
 		  upload_id = ?, build_id = ?, project_id = ?, env_id = ?,
 		  file_name = ?, total_size = ?, total_chunks = ?, received_chunks = ?,
-		  phase = ?, failed_at_phase = ?, error = ?, completed_at = ?,
+		  phase = ?, failed_at_phase = ?, error = ?, uploaded_by = ?, completed_at = ?,
 		  report_url = ?, passed = ?, failed = ?, skipped = ?, total = ?
 		  WHERE id = ?`),
 		s.UploadID, s.BuildID, s.ProjectID, s.EnvID,
 		s.FileName, s.TotalSize, s.TotalChunks, s.ReceivedChunks,
-		string(s.Phase), string(s.FailedAtPhase), s.Error, nullTime(s.CompletedAt),
+		string(s.Phase), string(s.FailedAtPhase), s.Error, s.UploadedBy, nullTime(s.CompletedAt),
 		s.ReportURL, s.Passed, s.Failed, s.Skipped, s.Total,
 		s.ID,
 	)
@@ -70,7 +70,7 @@ func (r *UploadSessionRepo) GetByUploadID(ctx context.Context, uploadID string) 
 	row := r.db.QueryRowContext(ctx,
 		r.db.Ph(`SELECT id, upload_id, build_id, project_id, env_id, file_name,
 		         total_size, total_chunks, received_chunks, phase, failed_at_phase, error,
-		         started_at, completed_at, report_url, passed, failed, skipped, total
+		         uploaded_by, started_at, completed_at, report_url, passed, failed, skipped, total
 		         FROM upload_sessions WHERE upload_id = ? LIMIT 1`),
 		uploadID,
 	)
@@ -81,7 +81,7 @@ func (r *UploadSessionRepo) GetByBuild(ctx context.Context, projectID, buildID s
 	row := r.db.QueryRowContext(ctx,
 		r.db.Ph(`SELECT id, upload_id, build_id, project_id, env_id, file_name,
 		         total_size, total_chunks, received_chunks, phase, failed_at_phase, error,
-		         started_at, completed_at, report_url, passed, failed, skipped, total
+		         uploaded_by, started_at, completed_at, report_url, passed, failed, skipped, total
 		         FROM upload_sessions WHERE project_id = ? AND build_id = ?
 		         ORDER BY started_at DESC LIMIT 1`),
 		projectID, buildID,
@@ -93,7 +93,7 @@ func (r *UploadSessionRepo) ListRecent(ctx context.Context, limit int) ([]*domai
 	rows, err := r.db.QueryContext(ctx,
 		r.db.Ph(`SELECT id, upload_id, build_id, project_id, env_id, file_name,
 		         total_size, total_chunks, received_chunks, phase, failed_at_phase, error,
-		         started_at, completed_at, report_url, passed, failed, skipped, total
+		         uploaded_by, started_at, completed_at, report_url, passed, failed, skipped, total
 		         FROM upload_sessions ORDER BY started_at DESC LIMIT ?`),
 		limit,
 	)
@@ -117,7 +117,7 @@ func (r *UploadSessionRepo) GetByID(ctx context.Context, id string) (*domain.Upl
 	row := r.db.QueryRowContext(ctx,
 		r.db.Ph(`SELECT id, upload_id, build_id, project_id, env_id, file_name,
 		         total_size, total_chunks, received_chunks, phase, failed_at_phase, error,
-		         started_at, completed_at, report_url, passed, failed, skipped, total
+		         uploaded_by, started_at, completed_at, report_url, passed, failed, skipped, total
 		         FROM upload_sessions WHERE id = ? LIMIT 1`),
 		id,
 	)
@@ -158,7 +158,7 @@ func scanSession(row *sql.Row) (*domain.UploadSession, error) {
 	err := row.Scan(
 		&s.ID, &s.UploadID, &s.BuildID, &s.ProjectID, &s.EnvID, &s.FileName,
 		&s.TotalSize, &s.TotalChunks, &s.ReceivedChunks, &phase, &failedAtPhase, &s.Error,
-		&startedAt, &completedAt, &s.ReportURL, &s.Passed, &s.Failed, &s.Skipped, &s.Total,
+		&s.UploadedBy, &startedAt, &completedAt, &s.ReportURL, &s.Passed, &s.Failed, &s.Skipped, &s.Total,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -189,7 +189,7 @@ func scanSessionRow(rows *sql.Rows) (*domain.UploadSession, error) {
 	err := rows.Scan(
 		&s.ID, &s.UploadID, &s.BuildID, &s.ProjectID, &s.EnvID, &s.FileName,
 		&s.TotalSize, &s.TotalChunks, &s.ReceivedChunks, &phase, &failedAtPhase, &s.Error,
-		&startedAt, &completedAt, &s.ReportURL, &s.Passed, &s.Failed, &s.Skipped, &s.Total,
+		&s.UploadedBy, &startedAt, &completedAt, &s.ReportURL, &s.Passed, &s.Failed, &s.Skipped, &s.Total,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: scan upload session row: %w", err)

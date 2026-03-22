@@ -79,17 +79,25 @@ function UploadSessionCard({ session, onRetry }: Props) {
           <div className="mt-1">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-on-surface-variant font-label">
-                Chunk {session.receivedChunks} / {session.totalChunks}
+                {session.totalChunks > 1
+                  ? `Chunk ${session.receivedChunks} / ${session.totalChunks}`
+                  : 'Uploading…'}
               </span>
-              <span className={`text-[11px] font-label font-bold ${meta.text}`}>{pct}%</span>
+              <span className={`text-[11px] font-label font-bold ${meta.text}`}>
+                {pct > 0 ? `${pct}%` : ''}
+              </span>
             </div>
             <div className="h-1 rounded-full overflow-hidden"
               style={{ background: 'rgb(var(--color-surface-container-highest))' }}
             >
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${meta.accent}`}
-                style={{ width: `${pct}%` }}
-              />
+              {pct === 0 ? (
+                <div className={`h-full w-full rounded-full ${meta.accent} opacity-60 animate-pulse`} />
+              ) : (
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${meta.accent}`}
+                  style={{ width: `${pct}%` }}
+                />
+              )}
             </div>
           </div>
         )}

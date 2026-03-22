@@ -12,10 +12,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tlmanz/allure-hub/internal/allure"
+	"github.com/tlmanz/allure-hub/internal/apikey"
 	"github.com/tlmanz/allure-hub/internal/repository"
-	"github.com/tlmanz/allure-hub/internal/usecase"
 	"github.com/tlmanz/allure-hub/internal/storage"
 	"github.com/tlmanz/allure-hub/internal/transport"
+	"github.com/tlmanz/allure-hub/internal/usecase"
 	"github.com/tlmanz/allure-hub/pkg/config"
 	"github.com/tlmanz/authkit"
 )
@@ -45,10 +46,12 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	log.Info("database connected", zap.String("driver", cfg.DB.Driver))
 
 	// ── Repositories ─────────────────────────────────────────────────────────
-	envRepo     := repository.NewEnvironmentRepo(db)
+	envRepo := repository.NewEnvironmentRepo(db)
 	projectRepo := repository.NewProjectRepo(db)
-	buildRepo   := repository.NewBuildRepo(db)
+	buildRepo := repository.NewBuildRepo(db)
 	sessionRepo := repository.NewUploadSessionRepo(db)
+	userRepo := repository.NewTrackedUserRepo(db)
+	apiKeyRepo := repository.NewAPIKeyRepo(db)
 
 	// ── Infrastructure adapters ───────────────────────────────────────────────
 	fs := storage.NewFilesystem(
@@ -67,10 +70,15 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	bus := usecase.NewEventBus()
 
 	// ── Services ──────────────────────────────────────────────────────────────
-	envSvc     := usecase.NewEnvironmentService(envRepo, projectRepo, sessionRepo, fs)
+	envSvc := usecase.NewEnvironmentService(envRepo, projectRepo, buildRepo, sessionRepo, fs)
 	projectSvc := usecase.NewProjectService(projectRepo, buildRepo, sessionRepo, fs)
-	reportSvc  := usecase.NewReportService(buildRepo, sessionRepo, bus, fs, gen, log)
-	uploadSvc  := usecase.NewUploadService(reportSvc, fs, sessionRepo, bus, cfg.Storage.AssembleTempDir)
+	reportSvc := usecase.NewReportService(buildRepo, sessionRepo, bus, fs, gen, log)
+	uploadSvc := usecase.NewUploadService(reportSvc, fs, sessionRepo, envRepo, projectRepo, bus, cfg.Storage.AssembleTempDir, log)
+
+	// ── API keys ──────────────────────────────────────────────────────────────
+	// Initialised before auth so keyStore can be passed as APIKeyValidator.
+	keyStore := apikey.NewStore(apiKeyRepo)
+	apiKeySvc := usecase.NewAPIKeyService(apiKeyRepo)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
 	var providers []authkit.ProviderConfig
@@ -86,10 +94,11 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		CallbackBaseURL: cfg.Auth.BaseURL,
 		SessionSecret:   cfg.Auth.SessionSecret,
 		SecureCookie:    cfg.Auth.SecureCookie,
-		AfterLoginURL:  cfg.Auth.AfterLoginURL,
-		AfterLogoutURL: cfg.Auth.AfterLogoutURL,
+		AfterLoginURL:   cfg.Auth.AfterLoginURL,
+		AfterLogoutURL:  cfg.Auth.AfterLogoutURL,
 		RBAC:            authkit.RBACConfig{FilePath: cfg.Auth.PolicyFile},
 		Logger:          transport.NewZapAuthLogger(log),
+		APIKeyValidator: keyStore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("authkit: %w", err)
@@ -102,6 +111,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		envSvc, projectSvc, reportSvc, uploadSvc,
 		sessionRepo, bus,
 		auth,
+		apiKeySvc, userRepo,
 		transport.RouterConfig{
 			DataDir:        cfg.Storage.DataDir,
 			WebDir:         cfg.Server.WebDir,

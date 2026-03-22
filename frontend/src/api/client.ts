@@ -1,4 +1,4 @@
-import type { Environment, Project, Report, ReportStats, PagedReports, UploadSession } from '../types'
+import type { Environment, Project, Report, ReportStats, PagedReports, UploadSession, APIKey, TrackedUser } from '../types'
 
 const BASE = '/api'
 
@@ -17,7 +17,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error('Unauthenticated')
   }
-  if (!res.ok) throw new Error(`Request failed (${res.status})`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(body.trim() || `Request failed (${res.status})`)
+  }
   if (res.status === 204) return undefined as T
   return res.json()
 }
@@ -96,6 +99,27 @@ export const api = {
 
   deleteUploadSession: (id: string) =>
     request<void>(`/uploads/${enc(id)}`, { method: 'DELETE' }),
+
+  // Settings — API keys
+  listAPIKeys: () =>
+    request<APIKey[]>('/settings/apikeys').then(d => d ?? []),
+
+  createAPIKey: (name: string, role: string) =>
+    request<{ key: APIKey; plaintext: string }>('/settings/apikeys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, role }),
+    }),
+
+  revokeAPIKey: (id: string) =>
+    request<void>(`/settings/apikeys/${enc(id)}`, { method: 'DELETE' }),
+
+  deleteAPIKey: (id: string) =>
+    request<void>(`/settings/apikeys/${enc(id)}?action=delete`, { method: 'DELETE' }),
+
+  // Settings — users
+  listUsers: () =>
+    request<TrackedUser[]>('/settings/users').then(d => d ?? []),
 
   // Chunked upload — drives Init → Chunks → Complete → Generate.
   // Pass an AbortSignal to cancel mid-flight (M-27).

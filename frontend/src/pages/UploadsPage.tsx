@@ -105,6 +105,15 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
             <span>{s.projectId} / {s.envId}</span>
             <span className="opacity-50">·</span>
             <span>{formatBytes(s.totalSize)}</span>
+            {s.uploadedBy && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[11px]">person</span>
+                  {s.uploadedBy}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -113,10 +122,10 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
           <div className="w-36 shrink-0">
             <div className="flex justify-between text-[10px] text-on-surface-variant font-label mb-1">
               <span>{ph.label}</span>
-              <span>{pct}%</span>
+              <span>{s.phase === 'uploading' && pct === 0 ? '…' : `${pct}%`}</span>
             </div>
             <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              {s.phase === 'assembling' || s.phase === 'generating' ? (
+              {s.phase === 'assembling' || s.phase === 'generating' || (s.phase === 'uploading' && pct === 0) ? (
                 <div className="h-full w-full rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary/40 animate-pulse" />
               ) : (
                 <div

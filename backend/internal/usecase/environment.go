@@ -10,12 +10,13 @@ import (
 type EnvironmentService struct {
 	repo        domain.EnvironmentRepository
 	projectRepo domain.ProjectRepository
+	buildRepo   domain.BuildRepository
 	sessionRepo domain.UploadSessionRepository
 	fs          FileStorage
 }
 
-func NewEnvironmentService(repo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, sessionRepo domain.UploadSessionRepository, fs FileStorage) *EnvironmentService {
-	return &EnvironmentService{repo: repo, projectRepo: projectRepo, sessionRepo: sessionRepo, fs: fs}
+func NewEnvironmentService(repo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, buildRepo domain.BuildRepository, sessionRepo domain.UploadSessionRepository, fs FileStorage) *EnvironmentService {
+	return &EnvironmentService{repo: repo, projectRepo: projectRepo, buildRepo: buildRepo, sessionRepo: sessionRepo, fs: fs}
 }
 
 func (s *EnvironmentService) Create(ctx context.Context, id, name, icon string) (*domain.Environment, error) {
@@ -59,14 +60,16 @@ func (s *EnvironmentService) Update(ctx context.Context, id, name, icon string) 
 	return s.repo.Get(ctx, id)
 }
 
-// Delete removes an environment, its projects' files, and all related upload sessions.
+// Delete removes an environment, all its projects, their builds, upload sessions, and files.
 func (s *EnvironmentService) Delete(ctx context.Context, id string) error {
 	projects, err := s.projectRepo.List(ctx, id)
 	if err != nil {
 		return err
 	}
 	for _, p := range projects {
-		_ = s.fs.RemoveProject(p.ID) // best-effort; continue even if FS removal fails
+		_ = s.buildRepo.DeleteByProject(ctx, p.ID) // best-effort
+		_ = s.projectRepo.Delete(ctx, id, p.ID)    // best-effort
+		_ = s.fs.RemoveProject(p.ID)               // best-effort
 	}
 	_ = s.sessionRepo.DeleteByEnv(ctx, id) // best-effort
 	return s.repo.Delete(ctx, id)

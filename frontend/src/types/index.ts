@@ -29,6 +29,7 @@ export interface Report {
   total: number
   status: string
   configSnapshot: Record<string, unknown>
+  uploadedBy?: string
 }
 
 export interface ReportStats {
@@ -69,4 +70,26 @@ export interface UploadSession {
   failed: number
   skipped: number
   total: number
+  uploadedBy?: string
+}
+
+export interface APIKey {
+  id: string
+  name: string
+  createdBy: string
+  role: string
+  lastUsedAt?: string
+  createdAt: string
+  expiresAt?: string
+  isActive: boolean
+}
+
+export interface TrackedUser {
+  email: string
+  name: string
+  avatarUrl: string
+  provider: string
+  role: string
+  firstLoginAt: string
+  lastLoginAt: string
 }

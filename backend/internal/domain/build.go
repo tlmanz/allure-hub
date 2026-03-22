@@ -19,6 +19,8 @@ type Build struct {
 	Skipped        int            `json:"skipped"`
 	Total          int            `json:"total"`
 	Status         string         `json:"status"`
+	// UploadedBy is the email (OAuth) or "apikey:<name>" of whoever uploaded these results.
+	UploadedBy     string         `json:"uploadedBy"`
 	// ConfigSnapshot is the effective allurerc.yml config used for generation,
 	// with server-controlled keys (output, historyPath) excluded.
 	ConfigSnapshot map[string]any `json:"configSnapshot"`

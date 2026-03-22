@@ -7,3 +7,4 @@ dist
 backend/.env
 backend/policy.yaml
 .mailmap
+.claude

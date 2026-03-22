@@ -1,6 +1,6 @@
 # Authentication
 
-allure-hub uses Google OAuth for login and a YAML-based RBAC policy for permissions.
+allure-hub supports two authentication methods: **Google OAuth** (for browser sessions) and **API keys** (for CI/CD and programmatic access). Both methods use the same RBAC permission model.
 
 ## Google OAuth setup
 
@@ -98,6 +98,51 @@ const { can } = useAuth()
 ```
 
 Roles and their frontend permissions are kept in sync with `policy.yaml` via the `ROLE_PERMS` map in `AuthContext.tsx`.
+
+## API key authentication
+
+API keys allow CI pipelines and scripts to upload results without browser-based OAuth.
+
+### Key format
+
+Keys are prefixed with `ah_` followed by 64 hex characters (256 bits of entropy):
+
+```
+ah_a3f9c2d1e8b047f6a1c3d5e7f9b2a4c6d8e0f2a4c6d8e0f2a4c6d8e0f2a4c6
+```
+
+The `ah_` prefix aids secret scanning tools in detecting leaked keys.
+
+### Using an API key
+
+Pass the key as a Bearer token in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer ah_..." \
+     https://your-host/api/environments/$ENV_ID/projects/$PROJECT_ID/results \
+     --data-binary @results.zip \
+     -H "Content-Type: application/zip"
+```
+
+### Managing API keys
+
+API keys are managed from the **Settings → API Keys** page (requires `manage` permission and an active browser session). Keys cannot be used to manage other keys.
+
+You can also manage keys via the API — see [Settings endpoints](api.md#settings).
+
+### Key lifecycle
+
+| State | Description |
+|---|---|
+| Active | Key is valid and can authenticate requests |
+| Revoked | Soft-deleted — key is rejected but the record is retained for audit |
+| Deleted | Permanently removed |
+
+The last-used timestamp is updated asynchronously on each successful authentication.
+
+### Upload attribution
+
+When a request is authenticated with an API key, the uploader is recorded as `apikey:<name>` (e.g. `apikey:ci-pipeline`) in the `uploadedBy` field on build and upload session records. OAuth-authenticated uploads record the user's email address.
 
 ## Session security
 

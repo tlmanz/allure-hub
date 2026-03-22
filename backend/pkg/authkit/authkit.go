@@ -19,3 +19,4 @@ const (
 	// projects, reports, and upload sessions.
 	PermManage = "manage"
 )
+

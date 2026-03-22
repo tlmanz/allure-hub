@@ -9,7 +9,8 @@ interface ProjectGridProps {
   onProjectDeleted?: () => void;
 }
 
-const ProjectGrid: React.FC<ProjectGridProps> = ({ envId, envName, projects, onProjectDeleted }) => (
+const ProjectGrid: React.FC<ProjectGridProps> = ({ envId, envName, projects, onProjectDeleted }) => {
+  return (
   <>
     <div className="flex justify-between items-end mb-12">
       <div>
@@ -25,13 +26,14 @@ const ProjectGrid: React.FC<ProjectGridProps> = ({ envId, envName, projects, onP
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <AddProjectCard envId={envId} />
       {projects.map((project) => (
         <ProjectCard key={project.id} {...project} envId={envId} onDeleted={onProjectDeleted} />
       ))}
-      <AddProjectCard envId={envId} />
     </div>
   </>
-);
+  )
+}
 
 export default ProjectGrid;

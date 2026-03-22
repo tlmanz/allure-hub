@@ -36,7 +36,6 @@ function AddEnvironmentCard() {
 export default function EnvironmentsPage() {
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [error, setError] = useState<string | null>(null)
-
   const load = useCallback(() => {
     api.listEnvironments()
       .then(setEnvironments)
@@ -72,7 +71,8 @@ export default function EnvironmentsPage() {
         <p className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mb-4">{error}</p>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <AddEnvironmentCard />
         {environments.map((env) => (
           <EnvironmentCard
             key={env.id}
@@ -85,7 +85,6 @@ export default function EnvironmentsPage() {
             onUpdated={load}
           />
         ))}
-        <AddEnvironmentCard />
       </div>
 
       <NewEnvironmentModal onCreated={load} />

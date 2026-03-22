@@ -22,8 +22,8 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 		return fmt.Errorf("repository: marshal config snapshot: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx,
-		r.db.Ph(`INSERT INTO builds (id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, config_snapshot)
-		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		r.db.Ph(`INSERT INTO builds (id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, uploaded_by, config_snapshot)
+		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		          ON CONFLICT(project_id, build_id) DO UPDATE SET
 		              report_url      = excluded.report_url,
 		              passed          = excluded.passed,
@@ -31,10 +31,11 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 		              skipped         = excluded.skipped,
 		              total           = excluded.total,
 		              status          = excluded.status,
+		              uploaded_by     = excluded.uploaded_by,
 		              config_snapshot = excluded.config_snapshot`),
 		b.ID, b.ProjectID, b.BuildID,
 		b.CreatedAt.UTC().Format(time.RFC3339),
-		b.ReportURL, b.Total, b.Passed, b.Failed, b.Skipped, b.Status,
+		b.ReportURL, b.Total, b.Passed, b.Failed, b.Skipped, b.Status, b.UploadedBy,
 		string(configJSON),
 	)
 	if err != nil {
@@ -47,10 +48,10 @@ func (r *BuildRepo) GetByBuildID(ctx context.Context, projectID, buildID string)
 	var b domain.Build
 	var createdAt, configJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, config_snapshot
+		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
 		         FROM builds WHERE project_id = ? AND build_id = ? LIMIT 1`),
 		projectID, buildID,
-	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &configJSON)
+	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -106,7 +107,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 	// Query 2: latest build per project using a portable correlated MAX subquery.
 	latestRows, err := r.db.QueryContext(ctx,
 		r.db.Ph(`SELECT b.id, b.project_id, b.build_id, b.created_at, b.report_url,
-		                b.passed, b.failed, b.skipped, b.total, b.status, b.config_snapshot
+		                b.passed, b.failed, b.skipped, b.total, b.status, b.uploaded_by, b.config_snapshot
 		         FROM builds b
 		         INNER JOIN (
 		             SELECT project_id, MAX(created_at) AS max_at
@@ -123,7 +124,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 		var b domain.Build
 		var createdAt, configJSON string
 		if err := latestRows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt,
-			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &configJSON); err != nil {
+			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
 		if t, err := parseTimestamp(createdAt); err == nil {
@@ -156,10 +157,10 @@ func (r *BuildRepo) LatestByProject(ctx context.Context, projectID string) (*dom
 	var b domain.Build
 	var createdAt, configJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, config_snapshot
+		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
 		         FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`),
 		projectID,
-	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &configJSON)
+	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -177,7 +178,7 @@ func (r *BuildRepo) LatestByProject(ctx context.Context, projectID string) (*dom
 
 func (r *BuildRepo) ListByProject(ctx context.Context, projectID string) ([]*domain.Build, error) {
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, config_snapshot
+		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
 		          FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 1000`),
 		projectID,
 	)
@@ -190,7 +191,7 @@ func (r *BuildRepo) ListByProject(ctx context.Context, projectID string) ([]*dom
 	for rows.Next() {
 		var b domain.Build
 		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &configJSON); err != nil {
+		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -208,7 +209,7 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, projectID, filter st
 	where, args := buildFilterWhere(projectID, filter)
 	args = append(args, limit, offset)
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, config_snapshot
+		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
 		          FROM builds WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`),
 		args...,
 	)
@@ -221,7 +222,7 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, projectID, filter st
 	for rows.Next() {
 		var b domain.Build
 		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &configJSON); err != nil {
+		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -281,6 +282,17 @@ func (r *BuildRepo) Delete(ctx context.Context, projectID, buildID string) error
 	)
 	if err != nil {
 		return fmt.Errorf("repository: delete build: %w", err)
+	}
+	return nil
+}
+
+func (r *BuildRepo) DeleteByProject(ctx context.Context, projectID string) error {
+	_, err := r.db.ExecContext(ctx,
+		r.db.Ph(`DELETE FROM builds WHERE project_id = ?`),
+		projectID,
+	)
+	if err != nil {
+		return fmt.Errorf("repository: delete builds by project: %w", err)
 	}
 	return nil
 }

@@ -210,26 +210,36 @@ export default function ProjectDetailPage() {
     <div className="flex flex-col h-full -mx-8 -my-6">
       {/* ── Sticky header: title + stats + filters ── */}
       <div className="sticky top-0 z-10 bg-background px-8 pt-6 pb-4 border-b border-outline-variant/15">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-4">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors rounded-lg"
+            aria-label="Back to Environments"
+          >
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span className="text-xs font-label">Environments</span>
+          </Link>
+          <span className="text-xs font-label text-on-surface-variant opacity-40">/</span>
+          <Link
+            to={`/environments/${envId}`}
+            className="text-xs font-label text-on-surface-variant hover:text-on-surface transition-colors px-1"
+          >
+            {envId}
+          </Link>
+          <span className="text-xs font-label text-on-surface-variant opacity-40">/</span>
+          <span className="text-xs font-label text-on-surface">{projectId}</span>
+        </div>
+
         {/* Page header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-          <div className="flex items-center gap-4">
-            <Link
-              to={`/environments/${envId}`}
-              className="p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors rounded-lg shrink-0"
-              aria-label="Back"
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                arrow_back
-              </span>
-            </Link>
-            <div>
-              <h3 className="text-3xl font-headline font-bold text-on-surface tracking-tight">
-                {projectId}
-              </h3>
-              <p className="text-sm text-on-surface-variant font-body mt-0.5">
-                Test execution analytics &amp; report history
-              </p>
-            </div>
+          <div>
+            <h3 className="text-3xl font-headline font-bold text-on-surface tracking-tight">
+              {projectId}
+            </h3>
+            <p className="text-sm text-on-surface-variant font-body mt-0.5">
+              Test execution analytics &amp; report history
+            </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -452,6 +462,12 @@ export default function ProjectDetailPage() {
                           </span>
                           <span>Pass rate: {rate}%</span>
                         </div>
+                        {r.uploadedBy && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[14px]">person</span>
+                            <span>{r.uploadedBy}</span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); toggleConfig(r.buildId); }}
