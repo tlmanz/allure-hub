@@ -114,7 +114,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 		             FROM builds WHERE project_id IN (`+r.db.InList(len(projectIDs))+`)
 		             GROUP BY project_id
 		         ) m ON b.project_id = m.project_id AND b.created_at = m.max_at`),
-		append(args, args...)...,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: batch latest builds: %w", err)

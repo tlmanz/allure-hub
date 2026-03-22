@@ -42,7 +42,7 @@ type DBConfig struct {
 // exhaustion (M-03) and MaxZipEntries prevents inode exhaustion (M-04).
 type StorageConfig struct {
 	DataDir              string `env:"DATA_DIR"              envDefault:"./data"`
-	AssembleTempDir      string `env:"ASSEMBLE_TEMP_DIR"     envDefault:"./temp"`       // staging dir for chunk assembly
+	AssembleTempDir      string `env:"ASSEMBLE_TEMP_DIR"     envDefault:"./temp"`      // staging dir for chunk assembly
 	MaxChunkBytes        int64  `env:"MAX_CHUNK_BYTES"       envDefault:"52428800"`    // 50 MB per chunk
 	MaxUploadBytes       int64  `env:"MAX_UPLOAD_BYTES"      envDefault:"1073741824"`  // 1 GB compressed cap
 	MaxDecompressedBytes int64  `env:"MAX_DECOMPRESSED_BYTES" envDefault:"1610612736"` // 1.5 GB decompressed cap (M-03)

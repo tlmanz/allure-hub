@@ -42,7 +42,7 @@ func Open(driver, dsn string, pool PoolConfig, log *zap.Logger) (*DB, error) {
 			sep = "&"
 		}
 		if !strings.Contains(dsn, "_fk=") {
-			dsn += sep + "_fk=on&_journal=WAL"
+			dsn += sep + "_fk=on&_journal=WAL&_busy_timeout=5000"
 		}
 	case "postgres":
 		driverName = "pgx"
@@ -59,8 +59,14 @@ func Open(driver, dsn string, pool PoolConfig, log *zap.Logger) (*DB, error) {
 		return nil, fmt.Errorf("repository: ping %s: %w", driver, err)
 	}
 
-	// Configure connection pool to prevent exhausting PostgreSQL limits (L-01).
-	raw.SetMaxOpenConns(pool.MaxOpenConns)
+	// Configure connection pool.
+	if driver == "sqlite" {
+		// SQLite allows only one writer; a single conn avoids SQLITE_BUSY under
+		// concurrent requests. WAL mode still allows concurrent reads on this conn.
+		raw.SetMaxOpenConns(1)
+	} else {
+		raw.SetMaxOpenConns(pool.MaxOpenConns)
+	}
 	raw.SetMaxIdleConns(pool.MaxIdleConns)
 	raw.SetConnMaxLifetime(pool.ConnMaxLifetime)
 	raw.SetConnMaxIdleTime(pool.ConnMaxIdleTime)
