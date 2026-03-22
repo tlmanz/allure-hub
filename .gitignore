@@ -8,3 +8,4 @@ backend/.env
 backend/policy.yaml
 .mailmap
 .claude
+.k8s
