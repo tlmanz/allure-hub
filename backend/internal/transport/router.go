@@ -110,8 +110,8 @@ func NewRouter(
 	mux.HandleFunc("GET /api/healthz", hh.Check)
 	mux.HandleFunc("GET /api/version", hh.Info)
 
-	// Serve generated Allure reports and the compiled SPA.
-	mux.Handle("/reports/", reportsHandler(rcfg.DataDir))
+	// Serve generated Allure reports — requires PermView (session or API key).
+	mux.Handle("/reports/", auth.Require(localauth.PermView)(reportsHandler(rcfg.DataDir)))
 	if rcfg.WebDir != "" {
 		mux.Handle("/", spaHandler(rcfg.WebDir))
 	}
