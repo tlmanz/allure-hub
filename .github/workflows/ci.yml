@@ -29,12 +29,12 @@ jobs:
           fi
 
       - name: Build
-        run: cd backend && go build -v .
+        run: go build -v .
 
       - name: Test
-        run: cd backend && go test -covermode=count -coverpkg=$(go list ./... | grep -v '/examples') -coverprofile=cover.out $(go list ./... | grep -v '/examples')
+        run: go test -covermode=count -coverpkg=$(go list ./... | grep -v '/examples') -coverprofile=cover.out $(go list ./... | grep -v '/examples')
 
       - name: Coverage
         uses: shogo82148/actions-goveralls@v1
         with:
-          path-to-profile: backend/cover.out
+          path-to-profile: cover.out
