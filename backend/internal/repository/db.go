@@ -90,6 +90,13 @@ func parseTimestamp(s string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t, nil
 	}
+	// PostgreSQL timestamp with timezone offset (with and without fractional seconds).
+	if t, err := time.Parse("2006-01-02 15:04:05.999999999-07", s); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02 15:04:05-07", s); err == nil {
+		return t.UTC(), nil
+	}
 	// SQLite default datetime format — no T separator, no timezone (UTC implied).
 	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
 		return t.UTC(), nil
