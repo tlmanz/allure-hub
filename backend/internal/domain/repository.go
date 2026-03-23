@@ -59,6 +59,10 @@ type UploadSessionRepository interface {
 type TrackedUserRepository interface {
 	Upsert(ctx context.Context, u *TrackedUser) error
 	List(ctx context.Context) ([]*TrackedUser, error)
+	// Search returns users whose email or name match query (case-insensitive
+	// substring). An empty query matches all users.
+	Search(ctx context.Context, query string, limit, offset int) ([]*TrackedUser, error)
+	CountSearch(ctx context.Context, query string) (int, error)
 }
 
 // APIKeyRepository is the persistence contract for API keys.
@@ -66,6 +70,10 @@ type APIKeyRepository interface {
 	Create(ctx context.Context, k *APIKey) error
 	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
 	List(ctx context.Context) ([]*APIKey, error)
+	// Search returns keys whose name or creator match query (case-insensitive
+	// substring). An empty query matches all keys.
+	Search(ctx context.Context, query string, limit, offset int) ([]*APIKey, error)
+	CountSearch(ctx context.Context, query string) (int, error)
 	UpdateLastUsed(ctx context.Context, id string) error
 	Revoke(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error

@@ -265,6 +265,12 @@ func (r *memAPIKeyRepo) List(_ context.Context) ([]*domain.APIKey, error) {
 	}
 	return out, nil
 }
+func (r *memAPIKeyRepo) Search(_ context.Context, _ string, _, _ int) ([]*domain.APIKey, error) {
+	return r.List(context.Background())
+}
+func (r *memAPIKeyRepo) CountSearch(_ context.Context, _ string) (int, error) {
+	return len(r.keys), nil
+}
 func (r *memAPIKeyRepo) UpdateLastUsed(_ context.Context, _ string) error { return nil }
 func (r *memAPIKeyRepo) Revoke(_ context.Context, id string) error {
 	if k, ok := r.keys[id]; ok {

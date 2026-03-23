@@ -39,6 +39,49 @@ func (r *APIKeyRepo) GetByHash(ctx context.Context, keyHash string) (*domain.API
 	return scanAPIKey(row)
 }
 
+// Search returns keys whose name or created_by match query (case-insensitive
+// substring), ordered by created_at descending, with limit/offset pagination.
+// An empty query matches all keys.
+func (r *APIKeyRepo) Search(ctx context.Context, query string, limit, offset int) ([]*domain.APIKey, error) {
+	like := "%" + query + "%"
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active
+		         FROM api_keys
+		         WHERE LOWER(name) LIKE LOWER(?) OR LOWER(created_by) LIKE LOWER(?)
+		         ORDER BY created_at DESC LIMIT ? OFFSET ?`),
+		like, like, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: search api keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []*domain.APIKey
+	for rows.Next() {
+		k, err := scanAPIKeyRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+// CountSearch returns the total number of keys matching query.
+func (r *APIKeyRepo) CountSearch(ctx context.Context, query string) (int, error) {
+	like := "%" + query + "%"
+	var n int
+	err := r.db.QueryRowContext(ctx,
+		r.db.Ph(`SELECT COUNT(*) FROM api_keys
+		         WHERE LOWER(name) LIKE LOWER(?) OR LOWER(created_by) LIKE LOWER(?)`),
+		like, like,
+	).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("repository: count api keys: %w", err)
+	}
+	return n, nil
+}
+
 // List returns all keys ordered by created_at descending.
 func (r *APIKeyRepo) List(ctx context.Context) ([]*domain.APIKey, error) {
 	rows, err := r.db.QueryContext(ctx,

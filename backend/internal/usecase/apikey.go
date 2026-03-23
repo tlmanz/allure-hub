@@ -59,6 +59,19 @@ func (s *APIKeyService) List(ctx context.Context) ([]*domain.APIKey, error) {
 	return s.repo.List(ctx)
 }
 
+// Search returns a page of keys matching query, plus the total match count.
+func (s *APIKeyService) Search(ctx context.Context, query string, limit, offset int) ([]*domain.APIKey, int, error) {
+	keys, err := s.repo.Search(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountSearch(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	return keys, total, nil
+}
+
 // Revoke soft-deletes a key by setting is_active = false.
 func (s *APIKeyService) Revoke(ctx context.Context, id string) error {
 	return s.repo.Revoke(ctx, id)

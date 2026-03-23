@@ -1,4 +1,4 @@
-import type { Environment, Project, Report, ReportStats, PagedReports, UploadSession, APIKey, TrackedUser } from '../types'
+import type { Environment, Project, Report, ReportStats, PagedReports, PagedAPIKeys, PagedUsers, UploadSession, APIKey } from '../types'
 
 const BASE = '/api'
 
@@ -101,8 +101,8 @@ export const api = {
     request<void>(`/uploads/${enc(id)}`, { method: 'DELETE' }),
 
   // Settings — API keys
-  listAPIKeys: () =>
-    request<APIKey[]>('/settings/apikeys').then(d => d ?? []),
+  listAPIKeys: (search = '', offset = 0) =>
+    request<PagedAPIKeys>(`/settings/apikeys?search=${enc(search)}&offset=${offset}`),
 
   createAPIKey: (name: string, role: string) =>
     request<{ key: APIKey; plaintext: string }>('/settings/apikeys', {
@@ -118,8 +118,18 @@ export const api = {
     request<void>(`/settings/apikeys/${enc(id)}?action=delete`, { method: 'DELETE' }),
 
   // Settings — users
-  listUsers: () =>
-    request<TrackedUser[]>('/settings/users').then(d => d ?? []),
+  listUsers: (search = '', offset = 0) =>
+    request<PagedUsers>(`/settings/users?search=${enc(search)}&offset=${offset}`),
+
+  setUserRole: (email: string, role: string) =>
+    request<void>(`/settings/users/${enc(email)}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    }),
+
+  resetUserRole: (email: string) =>
+    request<void>(`/settings/users/${enc(email)}/role`, { method: 'DELETE' }),
 
   // Chunked upload — drives Init → Chunks → Complete → Generate.
   // Pass an AbortSignal to cancel mid-flight (M-27).

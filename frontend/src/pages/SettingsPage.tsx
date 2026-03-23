@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { APIKey, TrackedUser } from '../types'
 import { formatDate } from '../utils/format'
+import { useAuth } from '../context/AuthContext'
+import SearchInput from '../components/ui/SearchInput'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const ROLES = ['admin', 'developer', 'viewer'] as const
 type Role = typeof ROLES[number]
+
+const PAGE_SIZE = 20
 
 function roleBadge(role: string) {
   switch (role) {
@@ -76,7 +81,7 @@ function PlaintextModal({ plaintext, onClose }: { plaintext: string; onClose: ()
   )
 }
 
-// ── Create key form ───────────────────────────────────────────────────────────
+// ── Role dropdown ─────────────────────────────────────────────────────────────
 
 function RoleDropdown({ value, onChange }: { value: Role; onChange: (r: Role) => void }) {
   const [open, setOpen] = useState(false)
@@ -135,6 +140,8 @@ function RoleDropdown({ value, onChange }: { value: Role; onChange: (r: Role) =>
   )
 }
 
+// ── Create key form ───────────────────────────────────────────────────────────
+
 function CreateKeyForm({ onCreated }: { onCreated: (plaintext: string) => void }) {
   const [name, setName] = useState('')
   const [role, setRole] = useState<Role>('developer')
@@ -192,24 +199,56 @@ function CreateKeyForm({ onCreated }: { onCreated: (plaintext: string) => void }
   )
 }
 
+// ── Load more button ──────────────────────────────────────────────────────────
+
+function LoadMoreButton({ remaining, loading, onClick }: { remaining: number; loading: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="w-full py-2.5 rounded-xl border border-outline-variant/20 text-sm text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+    >
+      {loading
+        ? 'Loading…'
+        : `Load more (${remaining} remaining)`}
+    </button>
+  )
+}
+
 // ── API Keys tab ──────────────────────────────────────────────────────────────
 
 function APIKeysTab() {
   const [keys, setKeys] = useState<APIKey[]>([])
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [plaintext, setPlaintext] = useState<string | null>(null)
   const [actionId, setActionId] = useState<string | null>(null)
 
-  const fetchKeys = useCallback(() => {
-    setLoading(true)
-    api.listAPIKeys()
-      .then(setKeys)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+  // loadPage fetches one page; append=true adds to existing list.
+  const loadPage = useCallback((q: string, off: number, append: boolean) => {
+    if (append) setLoadingMore(true)
+    else { setLoading(true); setError(null) }
+    api.listAPIKeys(q, off)
+      .then(data => {
+        setKeys(prev => append ? [...prev, ...(data.keys ?? [])] : (data.keys ?? []))
+        setTotal(data.total)
+        setOffset(off)
+      })
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load keys'))
+      .finally(() => { setLoading(false); setLoadingMore(false) })
   }, [])
 
-  useEffect(() => { fetchKeys() }, [fetchKeys])
+  // Initial load (no debounce).
+  const isFirst = useRef(true)
+  useEffect(() => {
+    if (isFirst.current) { isFirst.current = false; loadPage('', 0, false); return }
+    const t = setTimeout(() => loadPage(search, 0, false), 300)
+    return () => clearTimeout(t)
+  }, [search, loadPage])
 
   async function handleRevoke(id: string) {
     setActionId(id)
@@ -228,6 +267,7 @@ function APIKeysTab() {
     try {
       await api.deleteAPIKey(id)
       setKeys(prev => prev.filter(k => k.id !== id))
+      setTotal(t => t - 1)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete key')
     } finally {
@@ -237,8 +277,11 @@ function APIKeysTab() {
 
   function handleCreated(pt: string) {
     setPlaintext(pt)
-    fetchKeys()
+    // Reset to first page with current search so the new key appears.
+    loadPage(search, 0, false)
   }
+
+  const hasMore = keys.length < total
 
   return (
     <div className="space-y-6">
@@ -248,93 +291,103 @@ function APIKeysTab() {
         <CreateKeyForm onCreated={handleCreated} />
       </div>
 
-      {/* Keys list */}
-      <div>
-        <h3 className="text-sm font-headline font-bold text-on-surface mb-3">
-          Active Keys
-          {!loading && <span className="ml-2 text-on-surface-variant font-normal">({keys.filter(k => k.isActive).length})</span>}
+      {/* List header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h3 className="text-sm font-headline font-bold text-on-surface">
+          Keys
+          {!loading && <span className="ml-2 text-on-surface-variant font-normal">({total})</span>}
         </h3>
+        <SearchInput value={search} onValueChange={setSearch} placeholder="Search by name or creator…" />
+      </div>
 
-        {error && (
-          <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2 mb-3">{error}</p>
-        )}
+      {error && (
+        <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{error}</p>
+      )}
 
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <span className="text-on-surface-variant text-sm animate-pulse">Loading keys…</span>
-          </div>
-        ) : keys.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-surface-container-low/30 rounded-xl border border-dashed border-outline-variant/20">
-            <span className="material-symbols-outlined text-[36px] opacity-20 mb-3">key</span>
-            <p className="text-sm font-headline font-bold text-on-surface">No API keys yet</p>
-            <p className="text-xs text-on-surface-variant mt-1">Create a key above to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {keys.map(k => (
-              <div
-                key={k.id}
-                className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
-                  k.isActive
-                    ? 'bg-surface-container-low border-outline-variant/10'
-                    : 'bg-surface-container-lowest border-outline-variant/5 opacity-50'
-                }`}
-              >
-                {/* Status dot */}
-                <span className={`w-2 h-2 rounded-full shrink-0 ${k.isActive ? 'bg-emerald-500' : 'bg-on-surface-variant/30'}`} />
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <span className="text-on-surface-variant text-sm animate-pulse">Loading keys…</span>
+        </div>
+      ) : keys.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 bg-surface-container-low/30 rounded-xl border border-dashed border-outline-variant/20">
+          <span className="material-symbols-outlined text-[36px] opacity-20 mb-3">key</span>
+          <p className="text-sm font-headline font-bold text-on-surface">
+            {search ? 'No keys match your search' : 'No API keys yet'}
+          </p>
+          <p className="text-xs text-on-surface-variant mt-1">
+            {search ? 'Try a different search term.' : 'Create a key above to get started.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {keys.map(k => (
+            <div
+              key={k.id}
+              className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
+                k.isActive
+                  ? 'bg-surface-container-low border-outline-variant/10'
+                  : 'bg-surface-container-lowest border-outline-variant/5 opacity-50'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${k.isActive ? 'bg-emerald-500' : 'bg-on-surface-variant/30'}`} />
 
-                {/* Key info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-headline font-semibold text-on-surface">{k.name}</span>
-                    <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(k.role)}`}>
-                      {k.role}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-headline font-semibold text-on-surface">{k.name}</span>
+                  <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(k.role)}`}>
+                    {k.role}
+                  </span>
+                  {!k.isActive && (
+                    <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-error/10 text-error">
+                      Revoked
                     </span>
-                    {!k.isActive && (
-                      <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-error/10 text-error">
-                        Revoked
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 mt-0.5 text-[11px] text-on-surface-variant font-label flex-wrap">
-                    <span>Created by {k.createdBy}</span>
-                    <span className="opacity-50">·</span>
-                    <span>{formatDate(k.createdAt)}</span>
-                    {k.lastUsedAt && (
-                      <>
-                        <span className="opacity-50">·</span>
-                        <span>Last used {formatDate(k.lastUsedAt)}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {k.isActive && (
-                    <button
-                      onClick={() => handleRevoke(k.id)}
-                      disabled={actionId === k.id}
-                      className="px-3 py-1.5 rounded-lg text-xs font-label font-semibold text-on-surface-variant border border-outline-variant/20 hover:border-error/30 hover:text-error hover:bg-error/5 transition-colors disabled:opacity-50"
-                    >
-                      {actionId === k.id ? 'Revoking…' : 'Revoke'}
-                    </button>
                   )}
-                  <button
-                    onClick={() => handleDelete(k.id)}
-                    disabled={actionId === k.id}
-                    className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors disabled:opacity-50"
-                    title="Delete permanently"
-                    aria-label={`Delete key ${k.name}`}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                  </button>
+                </div>
+                <div className="flex items-center gap-4 mt-0.5 text-[11px] text-on-surface-variant font-label flex-wrap">
+                  <span>Created by {k.createdBy}</span>
+                  <span className="opacity-50">·</span>
+                  <span>{formatDate(k.createdAt)}</span>
+                  {k.lastUsedAt && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <span>Last used {formatDate(k.lastUsedAt)}</span>
+                    </>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {k.isActive && (
+                  <button
+                    onClick={() => handleRevoke(k.id)}
+                    disabled={actionId === k.id}
+                    className="px-3 py-1.5 rounded-lg text-xs font-label font-semibold text-on-surface-variant border border-outline-variant/20 hover:border-error/30 hover:text-error hover:bg-error/5 transition-colors disabled:opacity-50"
+                  >
+                    {actionId === k.id ? 'Revoking…' : 'Revoke'}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(k.id)}
+                  disabled={actionId === k.id}
+                  className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+                  title="Delete permanently"
+                  aria-label={`Delete key ${k.name}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {hasMore && (
+            <LoadMoreButton
+              remaining={total - keys.length}
+              loading={loadingMore}
+              onClick={() => loadPage(search, offset + PAGE_SIZE, true)}
+            />
+          )}
+        </div>
+      )}
 
       {plaintext && <PlaintextModal plaintext={plaintext} onClose={() => setPlaintext(null)} />}
     </div>
@@ -344,22 +397,84 @@ function APIKeysTab() {
 // ── Users tab ─────────────────────────────────────────────────────────────────
 
 function UsersTab() {
+  const { user: me } = useAuth()
   const [users, setUsers] = useState<TrackedUser[]>([])
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [savingEmail, setSavingEmail] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  useEffect(() => {
-    api.listUsers()
-      .then(setUsers)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+  const isAdmin = me?.role === 'admin'
+
+  const loadPage = useCallback((q: string, off: number, append: boolean) => {
+    if (append) setLoadingMore(true)
+    else { setLoading(true); setError(null) }
+    api.listUsers(q, off)
+      .then(data => {
+        setUsers(prev => append ? [...prev, ...(data.users ?? [])] : (data.users ?? []))
+        setTotal(data.total)
+        setOffset(off)
+      })
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load users'))
+      .finally(() => { setLoading(false); setLoadingMore(false) })
   }, [])
 
+  const isFirst = useRef(true)
+  useEffect(() => {
+    if (isFirst.current) { isFirst.current = false; loadPage('', 0, false); return }
+    const t = setTimeout(() => loadPage(search, 0, false), 300)
+    return () => clearTimeout(t)
+  }, [search, loadPage])
+
+  async function handleSetRole(email: string, role: Role) {
+    setSavingEmail(email)
+    setActionError(null)
+    try {
+      await api.setUserRole(email, role)
+      setUsers(prev => prev.map(u => u.email === email ? { ...u, role } : u))
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Failed to update role')
+    } finally {
+      setSavingEmail(null)
+    }
+  }
+
+  async function handleResetRole(email: string) {
+    setSavingEmail(email)
+    setActionError(null)
+    try {
+      await api.resetUserRole(email)
+      // Re-fetch current page so the YAML baseline role is reflected.
+      const data = await api.listUsers(search, 0)
+      setUsers(data.users ?? [])
+      setTotal(data.total)
+      setOffset(0)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Failed to reset role')
+    } finally {
+      setSavingEmail(null)
+    }
+  }
+
+  const hasMore = users.length < total
+
   return (
-    <div>
-      {error && (
-        <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2 mb-4">{error}</p>
-      )}
+    <div className="space-y-4">
+      {/* Search bar */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h3 className="text-sm font-headline font-bold text-on-surface">
+          Users
+          {!loading && <span className="ml-2 text-on-surface-variant font-normal">({total})</span>}
+        </h3>
+        <SearchInput value={search} onValueChange={setSearch} placeholder="Search by name or email…" />
+      </div>
+
+      {error && <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{error}</p>}
+      {actionError && <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{actionError}</p>}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -368,46 +483,90 @@ function UsersTab() {
       ) : users.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 bg-surface-container-low/30 rounded-xl border border-dashed border-outline-variant/20">
           <span className="material-symbols-outlined text-[36px] opacity-20 mb-3">group</span>
-          <p className="text-sm font-headline font-bold text-on-surface">No users yet</p>
-          <p className="text-xs text-on-surface-variant mt-1">Users appear here after their first login.</p>
+          <p className="text-sm font-headline font-bold text-on-surface">
+            {search ? 'No users match your search' : 'No users yet'}
+          </p>
+          <p className="text-xs text-on-surface-variant mt-1">
+            {search ? 'Try a different search term.' : 'Users appear here after their first login.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {users.map(u => (
-            <div
-              key={u.email}
-              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/10"
-            >
-              {/* Avatar */}
-              {u.avatarUrl ? (
-                <img src={u.avatarUrl} alt={u.name} className="w-9 h-9 rounded-full shrink-0" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold font-headline shrink-0">
-                  {u.name?.[0]?.toUpperCase() ?? u.email[0].toUpperCase()}
-                </span>
-              )}
+          {users.map(u => {
+            const isSelf = u.email === me?.email
+            const canEdit = isAdmin && !isSelf
+            const saving = savingEmail === u.email
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-headline font-semibold text-on-surface">{u.name || u.email}</span>
-                  <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(u.role)}`}>
-                    {u.role}
+            return (
+              <div
+                key={u.email}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/10"
+              >
+                {/* Avatar */}
+                {u.avatarUrl ? (
+                  <img src={u.avatarUrl} alt={u.name} className="w-9 h-9 rounded-full shrink-0" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold font-headline shrink-0">
+                    {u.name?.[0]?.toUpperCase() ?? u.email[0].toUpperCase()}
                   </span>
-                  <span className="text-[10px] font-label text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded capitalize">
-                    {u.provider}
-                  </span>
+                )}
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-headline font-semibold text-on-surface">{u.name || u.email}</span>
+                    {isSelf && (
+                      <span className="text-[10px] font-label text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded">you</span>
+                    )}
+                    <span className="text-[10px] font-label text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded capitalize">
+                      {u.provider}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant font-label mt-0.5 truncate lowercase">{u.email}</p>
                 </div>
-                <p className="text-[11px] text-on-surface-variant font-label mt-0.5 truncate lowercase">{u.email}</p>
-              </div>
 
-              {/* Timestamps */}
-              <div className="text-right shrink-0 hidden md:block">
-                <p className="text-[11px] text-on-surface-variant font-label">Last login: {formatDate(u.lastLoginAt)}</p>
-                <p className="text-[10px] text-on-surface-variant/60 font-label mt-0.5">First: {formatDate(u.firstLoginAt)}</p>
+                {/* Role control */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {saving ? (
+                    <span className="text-xs text-on-surface-variant animate-pulse px-2">Saving…</span>
+                  ) : canEdit ? (
+                    <>
+                      <RoleDropdown
+                        value={u.role as Role}
+                        onChange={role => handleSetRole(u.email, role)}
+                      />
+                      <button
+                        onClick={() => handleResetRole(u.email)}
+                        className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        title="Reset to policy.yaml baseline"
+                        aria-label={`Reset ${u.email} to baseline role`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(u.role)}`}>
+                      {u.role}
+                    </span>
+                  )}
+                </div>
+
+                {/* Timestamps */}
+                <div className="text-right shrink-0 hidden md:block">
+                  <p className="text-[11px] text-on-surface-variant font-label">Last login: {formatDate(u.lastLoginAt)}</p>
+                  <p className="text-[10px] text-on-surface-variant/60 font-label mt-0.5">First: {formatDate(u.firstLoginAt)}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
+
+          {hasMore && (
+            <LoadMoreButton
+              remaining={total - users.length}
+              loading={loadingMore}
+              onClick={() => loadPage(search, offset + PAGE_SIZE, true)}
+            />
+          )}
         </div>
       )}
     </div>
@@ -419,7 +578,9 @@ function UsersTab() {
 type Tab = 'apikeys' | 'users'
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('apikeys')
+  const [params, setParams] = useSearchParams()
+  const activeTab: Tab = params.get('tab') === 'users' ? 'users' : 'apikeys'
+  const setActiveTab = (tab: Tab) => setParams({ tab })
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'apikeys', label: 'API Keys', icon: 'key' },
@@ -433,7 +594,7 @@ export default function SettingsPage() {
         <div className="mb-5">
           <h2 className="text-4xl font-bold font-headline tracking-tight text-on-surface">Settings</h2>
           <p className="text-on-surface-variant font-body mt-2">
-            Manage API keys and view users who have accessed this system.
+            Manage API keys and user roles for everyone who has accessed this system.
           </p>
         </div>
 

@@ -23,11 +23,12 @@ import (
 
 // App holds all wired application components and manages the server lifecycle.
 type App struct {
-	log  *zap.Logger
-	db   *repository.DB
-	srv  *http.Server
-	cfg  config.Config
-	auth *authkit.Auth
+	log      *zap.Logger
+	db       *repository.DB
+	srv      *http.Server
+	cfg      config.Config
+	auth     *authkit.Auth
+	provider *authkit.LayeredPolicyProvider
 }
 
 // New wires all dependencies — repositories, services, HTTP router — and
@@ -81,6 +82,15 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	apiKeySvc := usecase.NewAPIKeyService(apiKeyRepo)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
+	roleStore := repository.NewRoleStore(db)
+	zapLogger := transport.NewZapAuthLogger(log)
+	provider, err := authkit.NewLayeredProvider(cfg.Auth.PolicyFile, roleStore,
+		authkit.WithLogger(zapLogger),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("authkit: layered provider: %w", err)
+	}
+
 	var providers []authkit.ProviderConfig
 	if cfg.Auth.GoogleClientID != "" && cfg.Auth.GoogleClientSecret != "" {
 		providers = append(providers, authkit.ProviderConfig{
@@ -96,8 +106,8 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		SecureCookie:    cfg.Auth.SecureCookie,
 		AfterLoginURL:   cfg.Auth.AfterLoginURL,
 		AfterLogoutURL:  cfg.Auth.AfterLogoutURL,
-		RBAC:            authkit.RBACConfig{FilePath: cfg.Auth.PolicyFile},
-		Logger:          transport.NewZapAuthLogger(log),
+		RBAC:            authkit.RBACConfig{Provider: provider},
+		Logger:          zapLogger,
 		APIKeyValidator: keyStore,
 	})
 	if err != nil {
@@ -110,7 +120,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		db,
 		envSvc, projectSvc, reportSvc, uploadSvc,
 		sessionRepo, bus,
-		auth,
+		auth, provider,
 		apiKeySvc, userRepo,
 		transport.RouterConfig{
 			DataDir:        cfg.Storage.DataDir,
@@ -136,7 +146,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	}
 	srv.RegisterOnShutdown(bus.Shutdown)
 
-	return &App{log: log, db: db, srv: srv, cfg: cfg, auth: auth}, nil
+	return &App{log: log, db: db, srv: srv, cfg: cfg, auth: auth, provider: provider}, nil
 }
 
 // Run starts the HTTP server and blocks until ctx is cancelled (e.g. SIGINT),

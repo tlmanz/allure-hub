@@ -93,3 +93,17 @@ export interface TrackedUser {
   firstLoginAt: string
   lastLoginAt: string
 }
+
+export interface PagedAPIKeys {
+  keys: APIKey[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface PagedUsers {
+  users: TrackedUser[]
+  total: number
+  limit: number
+  offset: number
+}

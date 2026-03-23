@@ -44,6 +44,7 @@ func NewRouter(
 	sessionRepo domain.UploadSessionRepository,
 	bus *usecase.EventBus,
 	auth *kit.Auth,
+	provider *kit.LayeredPolicyProvider,
 	apiKeySvc *usecase.APIKeyService,
 	userRepo domain.TrackedUserRepository,
 	rcfg RouterConfig,
@@ -56,7 +57,7 @@ func NewRouter(
 	rh := handler.NewReportHandler(reportSvc, uploadSvc, rcfg.MaxChunkBytes, rcfg.MaxUploadBytes, log)
 	uh := handler.NewUploadSessionHandler(sessionRepo, uploadSvc, bus, log)
 	hh := handler.NewHealthHandler(db)
-	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, log)
+	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, provider, log)
 
 	// Auth routes — OAuth flow (no API key auth here)
 	mux.HandleFunc("GET /auth/{provider}", auth.BeginAuth)
@@ -105,6 +106,8 @@ func NewRouter(
 	mux.Handle("POST /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.CreateAPIKey)))
 	mux.Handle("DELETE /api/settings/apikeys/{id}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.RevokeAPIKey)))
 	mux.Handle("GET /api/settings/users", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListUsers)))
+	mux.Handle("PATCH /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetUserRole)))
+	mux.Handle("DELETE /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ResetUserRole)))
 
 	// Health + version (unprotected)
 	mux.HandleFunc("GET /api/healthz", hh.Check)
