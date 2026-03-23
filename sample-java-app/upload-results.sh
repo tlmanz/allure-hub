@@ -22,6 +22,12 @@ PROJECT_ID="${PROJECT_ID:-sample-java}"
 PROJECT_NAME="${PROJECT_NAME:-Sample Java App}"
 BUILD_ID="${BUILD_ID:-$(date +%Y%m%d-%H%M%S)}"
 RESULTS_DIR="${RESULTS_DIR:-target/allure-results}"
+BEARER_TOKEN="${BEARER_TOKEN:-}"
+
+AUTH_HEADER=()
+if [[ -n "$BEARER_TOKEN" ]]; then
+  AUTH_HEADER=(-H "Authorization: Bearer $BEARER_TOKEN")
+fi
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 
@@ -43,24 +49,6 @@ echo "build       : $BUILD_ID"
 echo "results     : $RESULTS_DIR"
 echo ""
 
-# ── Ensure environment exists ─────────────────────────────────────────────────
-
-echo "→ Creating environment (skipped if already exists)..."
-curl -sf -X POST "$ALLURE_HUB_URL/api/environments" \
-  -H "Content-Type: application/json" \
-  -d "{\"id\":\"$ENV_ID\",\"name\":\"$ENV_NAME\"}" \
-  -o /dev/null \
-  -w "   HTTP %{http_code}\n" || true
-
-# ── Ensure project exists ─────────────────────────────────────────────────────
-
-echo "→ Creating project (skipped if already exists)..."
-curl -sf -X POST "$ALLURE_HUB_URL/api/environments/$ENV_ID/projects" \
-  -H "Content-Type: application/json" \
-  -d "{\"id\":\"$PROJECT_ID\",\"name\":\"$PROJECT_NAME\"}" \
-  -o /dev/null \
-  -w "   HTTP %{http_code}\n" || true
-
 # ── Zip results ───────────────────────────────────────────────────────────────
 
 tmp_zip="$(mktemp -u /tmp/allure-results-XXXXXX.zip)"
@@ -76,23 +64,13 @@ echo "   $zip_size compressed"
 # ── Stream upload ─────────────────────────────────────────────────────────────
 
 echo "→ Uploading..."
-curl -sf -X POST \
+curl -s -X POST \
   "$ALLURE_HUB_URL/api/environments/$ENV_ID/projects/$PROJECT_ID/results?buildId=$BUILD_ID" \
+  "${AUTH_HEADER[@]}" \
   -H "Content-Type: application/zip" \
   --data-binary "@$tmp_zip" \
-  -w "   HTTP %{http_code}\n" \
-  -o /dev/null
+  -w "\n   HTTP %{http_code}\n"
 
-# ── Trigger report generation ────────────────────────────────────────────────
-
-echo "→ Generating Allure Awesome report..."
-response=$(curl -sf -X POST \
-  "$ALLURE_HUB_URL/api/environments/$ENV_ID/projects/$PROJECT_ID/reports" \
-  -H "Content-Type: application/json" \
-  -d "{\"buildId\":\"$BUILD_ID\"}")
-
-report_url=$(echo "$response" | grep -o '"reportUrl":"[^"]*"' | cut -d'"' -f4)
 
 echo ""
 echo "Done."
-echo "Report: $ALLURE_HUB_URL$report_url"

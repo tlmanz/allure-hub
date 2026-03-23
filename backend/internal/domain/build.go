@@ -10,6 +10,7 @@ var ErrBuildNotFound = errors.New("build not found")
 // Build represents a generated Allure report for a specific test run.
 type Build struct {
 	ID             string         `json:"id"`
+	EnvID          string         `json:"envId"`
 	ProjectID      string         `json:"projectId"`
 	BuildID        string         `json:"buildId"`
 	CreatedAt      time.Time      `json:"createdAt"`

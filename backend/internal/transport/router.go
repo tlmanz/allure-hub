@@ -148,19 +148,22 @@ func upsertTrackedUser(ctx context.Context, repo domain.TrackedUserRepository, u
 func reportsHandler(dataDir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimPrefix(r.URL.Path, "/reports/")
-		parts := strings.SplitN(p, "/", 2)
-		if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		parts := strings.SplitN(p, "/", 3)
+		if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 			http.NotFound(w, r)
 			return
 		}
+		envID := parts[0]
+		projectID := parts[1]
+		rest := parts[2]
 
-		target := filepath.Join(dataDir, parts[0], "reports", parts[1])
+		target := filepath.Join(dataDir, envID, projectID, "reports", rest)
 		absTarget, err := filepath.Abs(target)
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		absBase, err := filepath.Abs(filepath.Join(dataDir, parts[0], "reports"))
+		absBase, err := filepath.Abs(filepath.Join(dataDir, envID, projectID, "reports"))
 		if err != nil {
 			http.NotFound(w, r)
 			return

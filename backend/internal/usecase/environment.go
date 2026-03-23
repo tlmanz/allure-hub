@@ -67,9 +67,9 @@ func (s *EnvironmentService) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	for _, p := range projects {
-		_ = s.buildRepo.DeleteByProject(ctx, p.ID) // best-effort
-		_ = s.projectRepo.Delete(ctx, id, p.ID)    // best-effort
-		_ = s.fs.RemoveProject(p.ID)               // best-effort
+		_ = s.buildRepo.DeleteByProject(ctx, id, p.ID) // best-effort
+		_ = s.projectRepo.Delete(ctx, id, p.ID)        // best-effort
+		_ = s.fs.RemoveProject(id, p.ID)               // best-effort
 	}
 	_ = s.sessionRepo.DeleteByEnv(ctx, id) // best-effort
 	return s.repo.Delete(ctx, id)

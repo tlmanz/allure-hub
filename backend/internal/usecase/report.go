@@ -35,8 +35,8 @@ func NewReportService(buildRepo domain.BuildRepository, sessionRepo domain.Uploa
 	}
 }
 
-func (s *ReportService) SaveResultsStream(ctx context.Context, projectID, buildID string, r io.Reader) error {
-	return s.fs.SaveResultsStream(projectID, buildID, r)
+func (s *ReportService) SaveResultsStream(ctx context.Context, envID, projectID, buildID string, r io.Reader) error {
+	return s.fs.SaveResultsStream(envID, projectID, buildID, r)
 }
 
 // Generate stitches history, runs allure generate, persists the Build record,
@@ -45,10 +45,10 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	log := s.log.With(zap.String("projectId", projectID), zap.String("buildId", buildID))
 	log.Debug("generate: starting")
 
-	resultsDir := s.fs.ResultsDir(projectID, buildID)
-	reportDir := s.fs.ReportDir(projectID, buildID)
-	persistentHistory := s.fs.HistoryDir(projectID)
-	historyFile := s.fs.HistoryFile(projectID)
+	resultsDir := s.fs.ResultsDir(envID, projectID, buildID)
+	reportDir := s.fs.ReportDir(envID, projectID, buildID)
+	persistentHistory := s.fs.HistoryDir(envID, projectID)
+	historyFile := s.fs.HistoryFile(envID, projectID)
 	log.Debug("generate: paths resolved",
 		zap.String("resultsDir", resultsDir),
 		zap.String("reportDir", reportDir),
@@ -90,7 +90,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 		log.Debug("generate: no new history dir found in report output")
 	}
 
-	reportURL := fmt.Sprintf("/reports/%s/%s/index.html", projectID, buildID)
+	reportURL := fmt.Sprintf("/reports/%s/%s/%s/index.html", envID, projectID, buildID)
 	passed, failed, skipped, total, status := parseSummary(reportDir)
 	log.Debug("generate: summary parsed", zap.Int("passed", passed), zap.Int("failed", failed), zap.Int("total", total), zap.String("status", status))
 
@@ -102,6 +102,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 
 	build := &domain.Build{
 		ID:             uuid.New().String(),
+		EnvID:          envID,
 		ProjectID:      projectID,
 		BuildID:        buildID,
 		CreatedAt:      time.Now().UTC(),
@@ -129,40 +130,40 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	return reportURL, nil
 }
 
-func (s *ReportService) List(ctx context.Context, projectID string) ([]*domain.Build, error) {
-	return s.buildRepo.ListByProject(ctx, projectID)
+func (s *ReportService) List(ctx context.Context, envID, projectID string) ([]*domain.Build, error) {
+	return s.buildRepo.ListByProject(ctx, envID, projectID)
 }
 
-func (s *ReportService) ListPaged(ctx context.Context, projectID, filter string, limit, offset int) ([]*domain.Build, int, error) {
-	builds, err := s.buildRepo.ListByProjectPaged(ctx, projectID, filter, limit, offset)
+func (s *ReportService) ListPaged(ctx context.Context, envID, projectID, filter string, limit, offset int) ([]*domain.Build, int, error) {
+	builds, err := s.buildRepo.ListByProjectPaged(ctx, envID, projectID, filter, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := s.buildRepo.CountByProjectFiltered(ctx, projectID, filter)
+	total, err := s.buildRepo.CountByProjectFiltered(ctx, envID, projectID, filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	return builds, total, nil
 }
 
-func (s *ReportService) Stats(ctx context.Context, projectID string) (*domain.BuildStats, error) {
-	return s.buildRepo.StatsForProject(ctx, projectID)
+func (s *ReportService) Stats(ctx context.Context, envID, projectID string) (*domain.BuildStats, error) {
+	return s.buildRepo.StatsForProject(ctx, envID, projectID)
 }
 
-func (s *ReportService) DeleteBuild(ctx context.Context, projectID, buildID string) error {
+func (s *ReportService) DeleteBuild(ctx context.Context, envID, projectID, buildID string) error {
 	// Fetch the build before deleting so we can match its history entry.
-	build, _ := s.buildRepo.GetByBuildID(ctx, projectID, buildID)
+	build, _ := s.buildRepo.GetByBuildID(ctx, envID, projectID, buildID)
 
-	_ = os.RemoveAll(s.fs.ResultsDir(projectID, buildID))
-	_ = os.RemoveAll(s.fs.ReportDir(projectID, buildID))
+	_ = os.RemoveAll(s.fs.ResultsDir(envID, projectID, buildID))
+	_ = os.RemoveAll(s.fs.ReportDir(envID, projectID, buildID))
 
-	if err := s.buildRepo.Delete(ctx, projectID, buildID); err != nil {
+	if err := s.buildRepo.Delete(ctx, envID, projectID, buildID); err != nil {
 		return err
 	}
 
 	// Best-effort: remove the matching entry from history.jsonl.
 	if build != nil {
-		_ = removeHistoryEntry(s.fs.HistoryFile(projectID), build.CreatedAt)
+		_ = removeHistoryEntry(s.fs.HistoryFile(envID, projectID), build.CreatedAt)
 	}
 	return nil
 }

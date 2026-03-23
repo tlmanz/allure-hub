@@ -31,12 +31,21 @@ POST /api/environments/{envId}/projects/{projectId}/results
 
 **Headers:**
 
+**Query parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `buildId` | Yes | Unique build identifier |
+
+**Headers:**
+
 | Header | Required | Description |
 |---|---|---|
 | `Content-Type` | Yes | `application/zip` or `application/octet-stream` |
-| `X-Build-Id` | No | Custom build identifier (auto-generated if omitted) |
 
 **Body:** raw zip bytes
+
+Report generation is triggered automatically after the upload completes. The response is returned once the results are saved; generation runs server-side.
 
 ## Upload — Strategy B: chunked
 

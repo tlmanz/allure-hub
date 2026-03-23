@@ -69,10 +69,11 @@ func testRepositories(t *testing.T, driver, dsn string) {
 
 	b := &domain.Build{
 		ID:        "build-uuid-1",
+		EnvID:     "test-env",
 		ProjectID: "my-project",
 		BuildID:   "build-001",
 		CreatedAt: time.Now().UTC(),
-		ReportURL: "/reports/my-project/build-001/index.html",
+		ReportURL: "/reports/test-env/my-project/build-001/index.html",
 		Passed:    42,
 		Failed:    3,
 	}
@@ -80,7 +81,7 @@ func testRepositories(t *testing.T, driver, dsn string) {
 		t.Fatalf("Save build: %v", err)
 	}
 
-	builds, err := buildRepo.ListByProject(ctx, "my-project")
+	builds, err := buildRepo.ListByProject(ctx, "test-env", "my-project")
 	if err != nil {
 		t.Fatalf("ListByProject: %v", err)
 	}
@@ -97,7 +98,7 @@ func testRepositories(t *testing.T, driver, dsn string) {
 	if err := buildRepo.Save(ctx, b); err != nil {
 		t.Fatalf("Save build upsert: %v", err)
 	}
-	builds, _ = buildRepo.ListByProject(ctx, "my-project")
+	builds, _ = buildRepo.ListByProject(ctx, "test-env", "my-project")
 	if builds[0].Passed != 50 {
 		t.Errorf("upsert: passed = %d, want 50", builds[0].Passed)
 	}

@@ -51,27 +51,27 @@ func NewFilesystem(dataDir string, maxBytes, maxDecompressed int64, maxZipEntrie
 	}
 }
 
-func (f *Filesystem) ResultsDir(projectID, buildID string) string {
-	return filepath.Join(f.dataDir, projectID, "results", buildID)
+func (f *Filesystem) ResultsDir(envID, projectID, buildID string) string {
+	return filepath.Join(f.dataDir, envID, projectID, "results", buildID)
 }
 
-func (f *Filesystem) ReportDir(projectID, buildID string) string {
-	return filepath.Join(f.dataDir, projectID, "reports", buildID)
+func (f *Filesystem) ReportDir(envID, projectID, buildID string) string {
+	return filepath.Join(f.dataDir, envID, projectID, "reports", buildID)
 }
 
-func (f *Filesystem) HistoryDir(projectID string) string {
-	return filepath.Join(f.dataDir, projectID, "history")
+func (f *Filesystem) HistoryDir(envID, projectID string) string {
+	return filepath.Join(f.dataDir, envID, projectID, "history")
 }
 
-func (f *Filesystem) HistoryFile(projectID string) string {
-	return filepath.Join(f.dataDir, projectID, "history.jsonl")
+func (f *Filesystem) HistoryFile(envID, projectID string) string {
+	return filepath.Join(f.dataDir, envID, projectID, "history.jsonl")
 }
 
 // SaveResultsStream reads a zip from r and extracts it directly to the
 // results directory. r is consumed with io.Copy in 32 KB chunks — the
 // full zip is never in memory at once.
-func (f *Filesystem) SaveResultsStream(projectID, buildID string, r io.Reader) error {
-	dest := f.ResultsDir(projectID, buildID)
+func (f *Filesystem) SaveResultsStream(envID, projectID, buildID string, r io.Reader) error {
+	dest := f.ResultsDir(envID, projectID, buildID)
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return err
 	}
@@ -171,33 +171,33 @@ func unzip(rs io.ReadSeeker, size int64, dest string, maxDecompressed int64, max
 }
 
 // InitProject creates the project directory tree on the filesystem.
-func (f *Filesystem) InitProject(id string) error {
-	return os.MkdirAll(filepath.Join(f.dataDir, id), 0755)
+func (f *Filesystem) InitProject(envID, id string) error {
+	return os.MkdirAll(filepath.Join(f.dataDir, envID, id), 0755)
 }
 
 // RemoveProject deletes the entire project directory tree from the filesystem.
-func (f *Filesystem) RemoveProject(id string) error {
-	return os.RemoveAll(filepath.Join(f.dataDir, id))
+func (f *Filesystem) RemoveProject(envID, id string) error {
+	return os.RemoveAll(filepath.Join(f.dataDir, envID, id))
 }
 
-func (f *Filesystem) ChunkDir(projectID, uploadID string) string {
-	return filepath.Join(f.dataDir, projectID, "uploads", uploadID)
+func (f *Filesystem) ChunkDir(envID, projectID, uploadID string) string {
+	return filepath.Join(f.dataDir, envID, projectID, "uploads", uploadID)
 }
 
-func (f *Filesystem) ChunkPath(projectID, uploadID string, index int) string {
-	return filepath.Join(f.ChunkDir(projectID, uploadID), strconv.Itoa(index))
+func (f *Filesystem) ChunkPath(envID, projectID, uploadID string, index int) string {
+	return filepath.Join(f.ChunkDir(envID, projectID, uploadID), strconv.Itoa(index))
 }
 
-func (f *Filesystem) WriteUploadMeta(projectID, uploadID string, meta usecase.UploadMeta) error {
+func (f *Filesystem) WriteUploadMeta(envID, projectID, uploadID string, meta usecase.UploadMeta) error {
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(f.ChunkDir(projectID, uploadID), "meta.json"), data, 0644)
+	return os.WriteFile(filepath.Join(f.ChunkDir(envID, projectID, uploadID), "meta.json"), data, 0644)
 }
 
-func (f *Filesystem) ReadUploadMeta(projectID, uploadID string) (usecase.UploadMeta, error) {
-	data, err := os.ReadFile(filepath.Join(f.ChunkDir(projectID, uploadID), "meta.json"))
+func (f *Filesystem) ReadUploadMeta(envID, projectID, uploadID string) (usecase.UploadMeta, error) {
+	data, err := os.ReadFile(filepath.Join(f.ChunkDir(envID, projectID, uploadID), "meta.json"))
 	if err != nil {
 		return usecase.UploadMeta{}, err
 	}

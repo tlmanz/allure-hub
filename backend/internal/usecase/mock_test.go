@@ -146,33 +146,33 @@ type memBuildRepo struct {
 }
 
 func (r *memBuildRepo) Save(_ context.Context, _ *domain.Build) error { return nil }
-func (r *memBuildRepo) GetByBuildID(_ context.Context, _, _ string) (*domain.Build, error) {
+func (r *memBuildRepo) GetByBuildID(_ context.Context, _, _, _ string) (*domain.Build, error) {
 	return nil, domain.ErrBuildNotFound
 }
-func (r *memBuildRepo) BatchStatsByProject(_ context.Context, ids []string) (map[string]*domain.ProjectBatchStats, error) {
+func (r *memBuildRepo) BatchStatsByProject(_ context.Context, _ string, ids []string) (map[string]*domain.ProjectBatchStats, error) {
 	if r.batchStats != nil {
 		return r.batchStats, nil
 	}
 	return make(map[string]*domain.ProjectBatchStats, len(ids)), nil
 }
-func (r *memBuildRepo) ListByProject(_ context.Context, _ string) ([]*domain.Build, error) {
+func (r *memBuildRepo) ListByProject(_ context.Context, _, _ string) ([]*domain.Build, error) {
 	return nil, nil
 }
-func (r *memBuildRepo) ListByProjectPaged(_ context.Context, _, _ string, _, _ int) ([]*domain.Build, error) {
+func (r *memBuildRepo) ListByProjectPaged(_ context.Context, _, _, _ string, _, _ int) ([]*domain.Build, error) {
 	return nil, nil
 }
-func (r *memBuildRepo) CountByProjectFiltered(_ context.Context, _, _ string) (int, error) {
+func (r *memBuildRepo) CountByProjectFiltered(_ context.Context, _, _, _ string) (int, error) {
 	return 0, nil
 }
-func (r *memBuildRepo) CountByProject(_ context.Context, _ string) (int, error) { return 0, nil }
-func (r *memBuildRepo) LatestByProject(_ context.Context, _ string) (*domain.Build, error) {
+func (r *memBuildRepo) CountByProject(_ context.Context, _, _ string) (int, error) { return 0, nil }
+func (r *memBuildRepo) LatestByProject(_ context.Context, _, _ string) (*domain.Build, error) {
 	return nil, domain.ErrBuildNotFound
 }
-func (r *memBuildRepo) StatsForProject(_ context.Context, _ string) (*domain.BuildStats, error) {
+func (r *memBuildRepo) StatsForProject(_ context.Context, _, _ string) (*domain.BuildStats, error) {
 	return &domain.BuildStats{}, nil
 }
-func (r *memBuildRepo) Delete(_ context.Context, _, _ string) error       { return nil }
-func (r *memBuildRepo) DeleteByProject(_ context.Context, _ string) error { return nil }
+func (r *memBuildRepo) Delete(_ context.Context, _, _, _ string) error       { return nil }
+func (r *memBuildRepo) DeleteByProject(_ context.Context, _, _ string) error { return nil }
 
 // ─── Upload Session Repo ──────────────────────────────────────────────────────
 
@@ -207,26 +207,26 @@ type memFS struct {
 	initedIDs  []string
 }
 
-func (f *memFS) InitProject(id string) error {
+func (f *memFS) InitProject(envID, id string) error {
 	if f.initErr != nil {
 		return f.initErr
 	}
 	f.initedIDs = append(f.initedIDs, id)
 	return nil
 }
-func (f *memFS) RemoveProject(id string) error {
+func (f *memFS) RemoveProject(envID, id string) error {
 	f.removedIDs = append(f.removedIDs, id)
 	return nil
 }
-func (f *memFS) SaveResultsStream(_, _ string, _ io.Reader) error        { return nil }
-func (f *memFS) ResultsDir(_, _ string) string                           { return "" }
-func (f *memFS) ReportDir(_, _ string) string                            { return "" }
-func (f *memFS) HistoryDir(_ string) string                              { return "" }
-func (f *memFS) HistoryFile(_ string) string                             { return "" }
-func (f *memFS) ChunkDir(_, _ string) string                             { return "" }
-func (f *memFS) ChunkPath(_, _ string, _ int) string                     { return "" }
-func (f *memFS) WriteUploadMeta(_, _ string, _ usecase.UploadMeta) error { return nil }
-func (f *memFS) ReadUploadMeta(_, _ string) (usecase.UploadMeta, error) {
+func (f *memFS) SaveResultsStream(_, _, _ string, _ io.Reader) error        { return nil }
+func (f *memFS) ResultsDir(_, _, _ string) string                           { return "" }
+func (f *memFS) ReportDir(_, _, _ string) string                            { return "" }
+func (f *memFS) HistoryDir(_, _ string) string                              { return "" }
+func (f *memFS) HistoryFile(_, _ string) string                             { return "" }
+func (f *memFS) ChunkDir(_, _, _ string) string                             { return "" }
+func (f *memFS) ChunkPath(_, _, _ string, _ int) string                     { return "" }
+func (f *memFS) WriteUploadMeta(_, _, _ string, _ usecase.UploadMeta) error { return nil }
+func (f *memFS) ReadUploadMeta(_, _, _ string) (usecase.UploadMeta, error) {
 	return usecase.UploadMeta{}, nil
 }
 

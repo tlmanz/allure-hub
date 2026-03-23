@@ -71,7 +71,7 @@ func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildI
 		return "", err
 	}
 
-	if err := os.MkdirAll(s.fs.ChunkDir(projectID, uploadID), 0755); err != nil {
+	if err := os.MkdirAll(s.fs.ChunkDir(envID, projectID, uploadID), 0755); err != nil {
 		s.failSessionByID(ctx, sess, fmt.Sprintf("create chunk dir: %v", err))
 		return "", err
 	}
@@ -81,7 +81,7 @@ func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildI
 		TotalSize:   totalSize,
 		TotalChunks: totalChunks,
 	}
-	if err := s.fs.WriteUploadMeta(projectID, uploadID, meta); err != nil {
+	if err := s.fs.WriteUploadMeta(envID, projectID, uploadID, meta); err != nil {
 		s.failSessionByID(ctx, sess, fmt.Sprintf("write upload meta: %v", err))
 		return "", err
 	}
@@ -91,8 +91,8 @@ func (s *UploadService) InitUpload(ctx context.Context, envID, projectID, buildI
 }
 
 // SaveChunk writes a single chunk to its slot file and updates received count.
-func (s *UploadService) SaveChunk(ctx context.Context, projectID, uploadID string, index, total int, body io.Reader) error {
-	f, err := os.Create(s.fs.ChunkPath(projectID, uploadID, index))
+func (s *UploadService) SaveChunk(ctx context.Context, envID, projectID, uploadID string, index, total int, body io.Reader) error {
+	f, err := os.Create(s.fs.ChunkPath(envID, projectID, uploadID, index))
 	if err != nil {
 		return fmt.Errorf("create chunk file: %w", err)
 	}
@@ -110,8 +110,8 @@ func (s *UploadService) SaveChunk(ctx context.Context, projectID, uploadID strin
 }
 
 // ChunksReceived returns how many chunk files exist in the upload directory.
-func (s *UploadService) ChunksReceived(ctx context.Context, projectID, uploadID string) (int, error) {
-	entries, err := os.ReadDir(s.fs.ChunkDir(projectID, uploadID))
+func (s *UploadService) ChunksReceived(ctx context.Context, envID, projectID, uploadID string) (int, error) {
+	entries, err := os.ReadDir(s.fs.ChunkDir(envID, projectID, uploadID))
 	if err != nil {
 		return 0, err
 	}
@@ -129,22 +129,26 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 	log := s.log.With(zap.String("projectId", projectID), zap.String("uploadId", uploadID))
 	log.Debug("assemble: starting")
 
-	// Transition to assembling.
+	// Transition to assembling; capture envID from session for FS path scoping.
+	envID := "default"
 	if sess, _ := s.sessionRepo.GetByUploadID(ctx, uploadID); sess != nil {
+		if sess.EnvID != "" {
+			envID = sess.EnvID
+		}
 		sess.Phase = domain.PhaseAssembling
 		if err := s.sessionRepo.Update(ctx, sess); err == nil {
 			s.bus.Publish(sess)
 		}
 	}
 
-	meta, err := s.fs.ReadUploadMeta(projectID, uploadID)
+	meta, err := s.fs.ReadUploadMeta(envID, projectID, uploadID)
 	if err != nil {
 		s.failSession(ctx, uploadID, fmt.Sprintf("read upload meta: %v", err))
 		return fmt.Errorf("read upload meta: %w", err)
 	}
 	log.Debug("assemble: meta loaded", zap.String("buildId", meta.BuildID), zap.Int("totalChunks", meta.TotalChunks), zap.Int64("totalSize", meta.TotalSize))
 
-	chunkDir := s.fs.ChunkDir(projectID, uploadID)
+	chunkDir := s.fs.ChunkDir(envID, projectID, uploadID)
 	entries, err := os.ReadDir(chunkDir)
 	if err != nil {
 		s.failSession(ctx, uploadID, err.Error())
@@ -209,7 +213,7 @@ func (s *UploadService) AssembleUpload(ctx context.Context, projectID, uploadID 
 	log.Debug("assemble: all chunks concatenated, starting unzip")
 
 	assembled.Seek(0, 0)
-	if err := s.reportSvc.SaveResultsStream(ctx, projectID, meta.BuildID, assembled); err != nil {
+	if err := s.reportSvc.SaveResultsStream(ctx, envID, projectID, meta.BuildID, assembled); err != nil {
 		s.failSession(ctx, uploadID, fmt.Sprintf("unzip assembled: %v", err))
 		return fmt.Errorf("unzip assembled: %w", err)
 	}
@@ -247,7 +251,7 @@ func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID,
 	}
 	log.Debug("stream upload: env+project validated, starting save")
 
-	if err := s.reportSvc.SaveResultsStream(ctx, projectID, buildID, body); err != nil {
+	if err := s.reportSvc.SaveResultsStream(ctx, envID, projectID, buildID, body); err != nil {
 		log.Debug("stream upload: save failed", zap.Error(err))
 		s.failSessionByID(ctx, sess, err.Error())
 		return err
@@ -256,14 +260,20 @@ func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID,
 
 	// Use background context — the request context may be cancelled if the
 	// client closed the connection, but we still need to persist the final state.
-	now := time.Now().UTC()
 	sess.Phase = domain.PhaseAssembling
 	sess.ReceivedChunks = 1
-	sess.CompletedAt = &now
 	if err := s.sessionRepo.Update(context.Background(), sess); err == nil {
 		s.bus.Publish(sess)
 	}
-	log.Debug("stream upload: session transitioned to assembling, awaiting generate call")
+
+	// Auto-generate report after stream upload.
+	log.Debug("stream upload: auto-generating report")
+	if _, err := s.reportSvc.Generate(context.Background(), envID, projectID, buildID, GenerateOptions{}); err != nil {
+		log.Error("stream upload: auto-generate failed", zap.Error(err))
+		s.failSessionByID(context.Background(), sess, fmt.Sprintf("auto-generate: %v", err))
+		return err
+	}
+	log.Debug("stream upload: report generated")
 	return nil
 }
 
@@ -275,9 +285,9 @@ func (s *UploadService) DeleteSession(ctx context.Context, id string) error {
 		return err
 	}
 	if sess != nil {
-		_ = os.RemoveAll(s.fs.ChunkDir(sess.ProjectID, sess.UploadID))
-		_ = os.RemoveAll(s.fs.ResultsDir(sess.ProjectID, sess.BuildID))
-		_ = os.RemoveAll(s.fs.ReportDir(sess.ProjectID, sess.BuildID))
+		_ = os.RemoveAll(s.fs.ChunkDir(sess.EnvID, sess.ProjectID, sess.UploadID))
+		_ = os.RemoveAll(s.fs.ResultsDir(sess.EnvID, sess.ProjectID, sess.BuildID))
+		_ = os.RemoveAll(s.fs.ReportDir(sess.EnvID, sess.ProjectID, sess.BuildID))
 	}
 	return s.sessionRepo.Delete(ctx, id)
 }

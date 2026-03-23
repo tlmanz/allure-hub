@@ -1,3 +1,6 @@
+-include .env
+export
+
 ALLURE_HUB_URL ?= http://localhost:8080
 PROJECT_ID     ?= sample-java
 PROJECT_NAME   ?= Sample Java App

@@ -7,17 +7,17 @@ import "io"
 // FileStorage is the port for all filesystem operations.
 // The infrastructure adapter lives in internal/storage.
 type FileStorage interface {
-	InitProject(id string) error
-	RemoveProject(id string) error
-	SaveResultsStream(projectID, buildID string, r io.Reader) error
-	ResultsDir(projectID, buildID string) string
-	ReportDir(projectID, buildID string) string
-	HistoryDir(projectID string) string
-	HistoryFile(projectID string) string // path to the Allure 3 history JSONL file
-	ChunkDir(projectID, uploadID string) string
-	ChunkPath(projectID, uploadID string, index int) string
-	WriteUploadMeta(projectID, uploadID string, meta UploadMeta) error
-	ReadUploadMeta(projectID, uploadID string) (UploadMeta, error)
+	InitProject(envID, id string) error
+	RemoveProject(envID, id string) error
+	SaveResultsStream(envID, projectID, buildID string, r io.Reader) error
+	ResultsDir(envID, projectID, buildID string) string
+	ReportDir(envID, projectID, buildID string) string
+	HistoryDir(envID, projectID string) string
+	HistoryFile(envID, projectID string) string // path to the Allure 3 history JSONL file
+	ChunkDir(envID, projectID, uploadID string) string
+	ChunkPath(envID, projectID, uploadID string, index int) string
+	WriteUploadMeta(envID, projectID, uploadID string, meta UploadMeta) error
+	ReadUploadMeta(envID, projectID, uploadID string) (UploadMeta, error)
 }
 
 // GenerateOptions carries arbitrary allurerc.yml overrides for a single report.

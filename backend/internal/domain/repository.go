@@ -25,17 +25,17 @@ type ProjectRepository interface {
 // BuildRepository is the persistence contract for Build aggregates.
 type BuildRepository interface {
 	Save(ctx context.Context, b *Build) error
-	GetByBuildID(ctx context.Context, projectID, buildID string) (*Build, error)
+	GetByBuildID(ctx context.Context, envID, projectID, buildID string) (*Build, error)
 	// BatchStatsByProject returns count + latest build per project in two queries (M-08).
-	BatchStatsByProject(ctx context.Context, projectIDs []string) (map[string]*ProjectBatchStats, error)
-	ListByProject(ctx context.Context, projectID string) ([]*Build, error)
-	ListByProjectPaged(ctx context.Context, projectID, filter string, limit, offset int) ([]*Build, error)
-	CountByProjectFiltered(ctx context.Context, projectID, filter string) (int, error)
-	CountByProject(ctx context.Context, projectID string) (int, error)
-	LatestByProject(ctx context.Context, projectID string) (*Build, error)
-	StatsForProject(ctx context.Context, projectID string) (*BuildStats, error)
-	Delete(ctx context.Context, projectID, buildID string) error
-	DeleteByProject(ctx context.Context, projectID string) error
+	BatchStatsByProject(ctx context.Context, envID string, projectIDs []string) (map[string]*ProjectBatchStats, error)
+	ListByProject(ctx context.Context, envID, projectID string) ([]*Build, error)
+	ListByProjectPaged(ctx context.Context, envID, projectID, filter string, limit, offset int) ([]*Build, error)
+	CountByProjectFiltered(ctx context.Context, envID, projectID, filter string) (int, error)
+	CountByProject(ctx context.Context, envID, projectID string) (int, error)
+	LatestByProject(ctx context.Context, envID, projectID string) (*Build, error)
+	StatsForProject(ctx context.Context, envID, projectID string) (*BuildStats, error)
+	Delete(ctx context.Context, envID, projectID, buildID string) error
+	DeleteByProject(ctx context.Context, envID, projectID string) error
 }
 
 // UploadSessionRepository is the persistence contract for UploadSession aggregates.

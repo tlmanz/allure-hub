@@ -114,8 +114,12 @@ func (h *ReportHandler) InitChunkedUpload(w http.ResponseWriter, r *http.Request
 //
 //	PUT /api/environments/:envId/projects/:projectId/uploads/:uploadId
 func (h *ReportHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
+	envID := r.PathValue("envId")
 	projectID := r.PathValue("projectId")
 	uploadID := r.PathValue("uploadId")
+	if !validatePathParam(w, "envId", envID) {
+		return
+	}
 	if !validatePathParam(w, "projectId", projectID) {
 		return
 	}
@@ -134,12 +138,12 @@ func (h *ReportHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := http.MaxBytesReader(w, r.Body, h.maxChunkBytes)
-	if err := h.uploadSvc.SaveChunk(r.Context(), projectID, uploadID, chunkIndex, totalChunks, body); err != nil {
+	if err := h.uploadSvc.SaveChunk(r.Context(), envID, projectID, uploadID, chunkIndex, totalChunks, body); err != nil {
 		h.log.Error("save chunk failed", zap.String("uploadId", uploadID), zap.Int("chunkIndex", chunkIndex), zap.Error(err))
 		http.Error(w, "failed to save chunk", http.StatusInternalServerError)
 		return
 	}
-	received, err := h.uploadSvc.ChunksReceived(r.Context(), projectID, uploadID)
+	received, err := h.uploadSvc.ChunksReceived(r.Context(), envID, projectID, uploadID)
 	if err != nil {
 		h.log.Error("count chunks failed", zap.String("uploadId", uploadID), zap.Error(err))
 		http.Error(w, "failed to count chunks", http.StatusInternalServerError)
@@ -209,7 +213,11 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 //
 //	GET /api/environments/:envId/projects/:projectId/reports?limit=15&offset=0&filter=all
 func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
+	envID := r.PathValue("envId")
 	projectID := r.PathValue("projectId")
+	if !validatePathParam(w, "envId", envID) {
+		return
+	}
 	if !validatePathParam(w, "projectId", projectID) {
 		return
 	}
@@ -221,7 +229,7 @@ func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 
 	// If no limit is specified, return all (legacy behaviour).
 	if limitStr == "" {
-		builds, err := h.reportSvc.List(r.Context(), projectID)
+		builds, err := h.reportSvc.List(r.Context(), envID, projectID)
 		if err != nil {
 			h.log.Error("list reports failed", zap.String("projectId", projectID), zap.Error(err))
 			http.Error(w, "failed to list reports", http.StatusInternalServerError)
@@ -241,7 +249,7 @@ func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	builds, total, err := h.reportSvc.ListPaged(r.Context(), projectID, filter, limit, offset)
+	builds, total, err := h.reportSvc.ListPaged(r.Context(), envID, projectID, filter, limit, offset)
 	if err != nil {
 		h.log.Error("list reports paged failed", zap.String("projectId", projectID), zap.Error(err))
 		http.Error(w, "failed to list reports", http.StatusInternalServerError)
@@ -262,15 +270,19 @@ func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 //
 //	DELETE /api/environments/:envId/projects/:projectId/reports/:buildId
 func (h *ReportHandler) DeleteReport(w http.ResponseWriter, r *http.Request) {
+	envID := r.PathValue("envId")
 	projectID := r.PathValue("projectId")
 	buildID := r.PathValue("buildId")
+	if !validatePathParam(w, "envId", envID) {
+		return
+	}
 	if !validatePathParam(w, "projectId", projectID) {
 		return
 	}
 	if !validatePathParam(w, "buildId", buildID) {
 		return
 	}
-	if err := h.reportSvc.DeleteBuild(r.Context(), projectID, buildID); err != nil {
+	if err := h.reportSvc.DeleteBuild(r.Context(), envID, projectID, buildID); err != nil {
 		h.log.Error("delete report failed", zap.String("projectId", projectID), zap.String("buildId", buildID), zap.Error(err))
 		http.Error(w, "failed to delete report", http.StatusInternalServerError)
 		return
@@ -282,11 +294,15 @@ func (h *ReportHandler) DeleteReport(w http.ResponseWriter, r *http.Request) {
 //
 //	GET /api/environments/:envId/projects/:projectId/reports/stats
 func (h *ReportHandler) ReportStats(w http.ResponseWriter, r *http.Request) {
+	envID := r.PathValue("envId")
 	projectID := r.PathValue("projectId")
+	if !validatePathParam(w, "envId", envID) {
+		return
+	}
 	if !validatePathParam(w, "projectId", projectID) {
 		return
 	}
-	stats, err := h.reportSvc.Stats(r.Context(), projectID)
+	stats, err := h.reportSvc.Stats(r.Context(), envID, projectID)
 	if err != nil {
 		h.log.Error("report stats failed", zap.String("projectId", projectID), zap.Error(err))
 		http.Error(w, "failed to get stats", http.StatusInternalServerError)

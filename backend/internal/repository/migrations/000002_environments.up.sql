@@ -1,17 +1,11 @@
--- Create environments table
+-- environments table and projects.environment_id are now part of 000001_init.up.sql.
+-- These statements are kept as no-ops for any database that ran the old 000001.
 CREATE TABLE IF NOT EXISTS environments (
     id         TEXT PRIMARY KEY,
     name       TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
--- Seed a default environment so existing projects remain valid.
--- Uses standard SQL compatible with both SQLite (3.24+) and PostgreSQL.
 INSERT INTO environments (id, name, created_at)
 VALUES ('default', 'Default', CURRENT_TIMESTAMP)
 ON CONFLICT (id) DO NOTHING;
-
--- Add environment_id to projects (defaults to 'default' for all existing rows)
-ALTER TABLE projects
-ADD COLUMN environment_id TEXT NOT NULL DEFAULT 'default'
-REFERENCES environments(id) ON DELETE CASCADE;

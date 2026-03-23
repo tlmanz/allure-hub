@@ -38,7 +38,7 @@ func (s *ProjectService) Create(ctx context.Context, envID, id, name string) (*d
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
 	}
-	if err := s.fs.InitProject(id); err != nil {
+	if err := s.fs.InitProject(envID, id); err != nil {
 		_ = s.repo.Delete(ctx, envID, id) // best-effort rollback
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (s *ProjectService) ListSummaries(ctx context.Context, envID string) ([]*Pr
 	for i, p := range projects {
 		ids[i] = p.ID
 	}
-	batchStats, err := s.buildRepo.BatchStatsByProject(ctx, ids)
+	batchStats, err := s.buildRepo.BatchStatsByProject(ctx, envID, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (s *ProjectService) Delete(ctx context.Context, envID, id string) error {
 	if err := s.repo.Delete(ctx, envID, id); err != nil {
 		return err
 	}
-	_ = s.buildRepo.DeleteByProject(ctx, id)   // best-effort
-	_ = s.sessionRepo.DeleteByProject(ctx, id) // best-effort
-	return s.fs.RemoveProject(id)
+	_ = s.buildRepo.DeleteByProject(ctx, envID, id)   // best-effort
+	_ = s.sessionRepo.DeleteByProject(ctx, id)        // best-effort
+	return s.fs.RemoveProject(envID, id)
 }

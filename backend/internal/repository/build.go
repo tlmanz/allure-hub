@@ -22,9 +22,9 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 		return fmt.Errorf("repository: marshal config snapshot: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx,
-		r.db.Ph(`INSERT INTO builds (id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, uploaded_by, config_snapshot)
-		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		          ON CONFLICT(project_id, build_id) DO UPDATE SET
+		r.db.Ph(`INSERT INTO builds (id, env_id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, uploaded_by, config_snapshot)
+		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		          ON CONFLICT(env_id, project_id, build_id) DO UPDATE SET
 		              report_url      = excluded.report_url,
 		              passed          = excluded.passed,
 		              failed          = excluded.failed,
@@ -33,7 +33,7 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 		              status          = excluded.status,
 		              uploaded_by     = excluded.uploaded_by,
 		              config_snapshot = excluded.config_snapshot`),
-		b.ID, b.ProjectID, b.BuildID,
+		b.ID, b.EnvID, b.ProjectID, b.BuildID,
 		b.CreatedAt.UTC().Format(time.RFC3339),
 		b.ReportURL, b.Total, b.Passed, b.Failed, b.Skipped, b.Status, b.UploadedBy,
 		string(configJSON),
@@ -44,14 +44,14 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 	return nil
 }
 
-func (r *BuildRepo) GetByBuildID(ctx context.Context, projectID, buildID string) (*domain.Build, error) {
+func (r *BuildRepo) GetByBuildID(ctx context.Context, envID, projectID, buildID string) (*domain.Build, error) {
 	var b domain.Build
 	var createdAt, configJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
-		         FROM builds WHERE project_id = ? AND build_id = ? LIMIT 1`),
-		projectID, buildID,
-	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		         FROM builds WHERE env_id = ? AND project_id = ? AND build_id = ? LIMIT 1`),
+		envID, projectID, buildID,
+	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -69,21 +69,22 @@ func (r *BuildRepo) GetByBuildID(ctx context.Context, projectID, buildID string)
 
 // BatchStatsByProject returns build counts and latest builds for all given project IDs
 // in exactly two queries, eliminating the 2N+1 query pattern in ListSummaries (M-08).
-func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string) (map[string]*domain.ProjectBatchStats, error) {
+func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, projectIDs []string) (map[string]*domain.ProjectBatchStats, error) {
 	result := make(map[string]*domain.ProjectBatchStats, len(projectIDs))
 	if len(projectIDs) == 0 {
 		return result, nil
 	}
 
-	args := make([]any, len(projectIDs))
+	args := make([]any, len(projectIDs)+1)
+	args[0] = envID
 	for i, id := range projectIDs {
-		args[i] = id
+		args[i+1] = id
 		result[id] = &domain.ProjectBatchStats{}
 	}
 
 	// Query 1: counts per project.
 	countRows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT project_id, COUNT(*) FROM builds WHERE project_id IN (`+r.db.InList(len(projectIDs))+`) GROUP BY project_id`),
+		r.db.Ph(`SELECT project_id, COUNT(*) FROM builds WHERE env_id = ? AND project_id IN (`+r.db.InList(len(projectIDs))+`) GROUP BY project_id`),
 		args...,
 	)
 	if err != nil {
@@ -105,16 +106,17 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 	}
 
 	// Query 2: latest build per project using a portable correlated MAX subquery.
+	// args has envID + projectIDs; append envID again for the join condition.
 	latestRows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT b.id, b.project_id, b.build_id, b.created_at, b.report_url,
+		r.db.Ph(`SELECT b.id, b.env_id, b.project_id, b.build_id, b.created_at, b.report_url,
 		                b.passed, b.failed, b.skipped, b.total, b.status, b.uploaded_by, b.config_snapshot
 		         FROM builds b
 		         INNER JOIN (
 		             SELECT project_id, MAX(created_at) AS max_at
-		             FROM builds WHERE project_id IN (`+r.db.InList(len(projectIDs))+`)
+		             FROM builds WHERE env_id = ? AND project_id IN (`+r.db.InList(len(projectIDs))+`)
 		             GROUP BY project_id
-		         ) m ON b.project_id = m.project_id AND b.created_at = m.max_at`),
-		args...,
+		         ) m ON b.project_id = m.project_id AND b.created_at = m.max_at AND b.env_id = ?`),
+		append(args, envID)...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: batch latest builds: %w", err)
@@ -123,7 +125,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 	for latestRows.Next() {
 		var b domain.Build
 		var createdAt, configJSON string
-		if err := latestRows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt,
+		if err := latestRows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt,
 			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
@@ -141,11 +143,11 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, projectIDs []string
 	return result, latestRows.Err()
 }
 
-func (r *BuildRepo) CountByProject(ctx context.Context, projectID string) (int, error) {
+func (r *BuildRepo) CountByProject(ctx context.Context, envID, projectID string) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT COUNT(*) FROM builds WHERE project_id = ?`),
-		projectID,
+		r.db.Ph(`SELECT COUNT(*) FROM builds WHERE env_id = ? AND project_id = ?`),
+		envID, projectID,
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("repository: count builds: %w", err)
@@ -153,14 +155,14 @@ func (r *BuildRepo) CountByProject(ctx context.Context, projectID string) (int, 
 	return count, nil
 }
 
-func (r *BuildRepo) LatestByProject(ctx context.Context, projectID string) (*domain.Build, error) {
+func (r *BuildRepo) LatestByProject(ctx context.Context, envID, projectID string) (*domain.Build, error) {
 	var b domain.Build
 	var createdAt, configJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
-		         FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`),
-		projectID,
-	).Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		         FROM builds WHERE env_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 1`),
+		envID, projectID,
+	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -176,11 +178,11 @@ func (r *BuildRepo) LatestByProject(ctx context.Context, projectID string) (*dom
 	return &b, nil
 }
 
-func (r *BuildRepo) ListByProject(ctx context.Context, projectID string) ([]*domain.Build, error) {
+func (r *BuildRepo) ListByProject(ctx context.Context, envID, projectID string) ([]*domain.Build, error) {
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
-		          FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 1000`),
-		projectID,
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		          FROM builds WHERE env_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 1000`),
+		envID, projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list builds: %w", err)
@@ -191,7 +193,7 @@ func (r *BuildRepo) ListByProject(ctx context.Context, projectID string) ([]*dom
 	for rows.Next() {
 		var b domain.Build
 		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -205,11 +207,11 @@ func (r *BuildRepo) ListByProject(ctx context.Context, projectID string) ([]*dom
 	return builds, rows.Err()
 }
 
-func (r *BuildRepo) ListByProjectPaged(ctx context.Context, projectID, filter string, limit, offset int) ([]*domain.Build, error) {
-	where, args := buildFilterWhere(projectID, filter)
+func (r *BuildRepo) ListByProjectPaged(ctx context.Context, envID, projectID, filter string, limit, offset int) ([]*domain.Build, error) {
+	where, args := buildFilterWhere(envID, projectID, filter)
 	args = append(args, limit, offset)
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
 		          FROM builds WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`),
 		args...,
 	)
@@ -222,7 +224,7 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, projectID, filter st
 	for rows.Next() {
 		var b domain.Build
 		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -236,8 +238,8 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, projectID, filter st
 	return builds, rows.Err()
 }
 
-func (r *BuildRepo) CountByProjectFiltered(ctx context.Context, projectID, filter string) (int, error) {
-	where, args := buildFilterWhere(projectID, filter)
+func (r *BuildRepo) CountByProjectFiltered(ctx context.Context, envID, projectID, filter string) (int, error) {
+	where, args := buildFilterWhere(envID, projectID, filter)
 	var count int
 	err := r.db.QueryRowContext(ctx,
 		r.db.Ph(`SELECT COUNT(*) FROM builds WHERE `+where),
@@ -249,15 +251,15 @@ func (r *BuildRepo) CountByProjectFiltered(ctx context.Context, projectID, filte
 	return count, nil
 }
 
-func (r *BuildRepo) StatsForProject(ctx context.Context, projectID string) (*domain.BuildStats, error) {
+func (r *BuildRepo) StatsForProject(ctx context.Context, envID, projectID string) (*domain.BuildStats, error) {
 	var stats domain.BuildStats
 	err := r.db.QueryRowContext(ctx,
 		r.db.Ph(`SELECT
 		  COUNT(*) AS total_runs,
 		  COALESCE(SUM(failed), 0) AS total_failed,
 		  CASE WHEN SUM(total) > 0 THEN CAST(SUM(passed)*100/SUM(total) AS INTEGER) ELSE 0 END AS avg_rate
-		FROM builds WHERE project_id = ?`),
-		projectID,
+		FROM builds WHERE env_id = ? AND project_id = ?`),
+		envID, projectID,
 	).Scan(&stats.TotalRuns, &stats.TotalFailed, &stats.AvgRate)
 	if err != nil {
 		return nil, fmt.Errorf("repository: stats for project: %w", err)
@@ -266,8 +268,8 @@ func (r *BuildRepo) StatsForProject(ctx context.Context, projectID string) (*dom
 	// Latest pass rate from the most recent build.
 	var latestTotal, latestPassed int
 	err = r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT total, passed FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`),
-		projectID,
+		r.db.Ph(`SELECT total, passed FROM builds WHERE env_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 1`),
+		envID, projectID,
 	).Scan(&latestTotal, &latestPassed)
 	if err == nil && latestTotal > 0 {
 		stats.LatestRate = latestPassed * 100 / latestTotal
@@ -275,10 +277,10 @@ func (r *BuildRepo) StatsForProject(ctx context.Context, projectID string) (*dom
 	return &stats, nil
 }
 
-func (r *BuildRepo) Delete(ctx context.Context, projectID, buildID string) error {
+func (r *BuildRepo) Delete(ctx context.Context, envID, projectID, buildID string) error {
 	_, err := r.db.ExecContext(ctx,
-		r.db.Ph(`DELETE FROM builds WHERE project_id = ? AND build_id = ?`),
-		projectID, buildID,
+		r.db.Ph(`DELETE FROM builds WHERE env_id = ? AND project_id = ? AND build_id = ?`),
+		envID, projectID, buildID,
 	)
 	if err != nil {
 		return fmt.Errorf("repository: delete build: %w", err)
@@ -286,10 +288,10 @@ func (r *BuildRepo) Delete(ctx context.Context, projectID, buildID string) error
 	return nil
 }
 
-func (r *BuildRepo) DeleteByProject(ctx context.Context, projectID string) error {
+func (r *BuildRepo) DeleteByProject(ctx context.Context, envID, projectID string) error {
 	_, err := r.db.ExecContext(ctx,
-		r.db.Ph(`DELETE FROM builds WHERE project_id = ?`),
-		projectID,
+		r.db.Ph(`DELETE FROM builds WHERE env_id = ? AND project_id = ?`),
+		envID, projectID,
 	)
 	if err != nil {
 		return fmt.Errorf("repository: delete builds by project: %w", err)
@@ -304,13 +306,13 @@ func parseBuildTime(s string) (time.Time, error) {
 }
 
 // buildFilterWhere returns the WHERE clause fragment and args for a filter.
-func buildFilterWhere(projectID, filter string) (string, []any) {
+func buildFilterWhere(envID, projectID, filter string) (string, []any) {
 	switch filter {
 	case "passed":
-		return "project_id = ? AND failed = 0 AND total > 0", []any{projectID}
+		return "env_id = ? AND project_id = ? AND failed = 0 AND total > 0", []any{envID, projectID}
 	case "failed":
-		return "project_id = ? AND failed > 0", []any{projectID}
+		return "env_id = ? AND project_id = ? AND failed > 0", []any{envID, projectID}
 	default:
-		return "project_id = ?", []any{projectID}
+		return "env_id = ? AND project_id = ?", []any{envID, projectID}
 	}
 }

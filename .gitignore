@@ -4,7 +4,7 @@ target
 data
 allure-report
 dist
-backend/.env
+.env
 backend/policy.yaml
 .mailmap
 .claude

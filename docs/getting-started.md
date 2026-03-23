@@ -97,7 +97,8 @@ make sample-run ALLURE_HUB_URL=http://localhost:8080
 - name: Upload to allure-hub
   env:
     ALLURE_HUB_URL: ${{ secrets.ALLURE_HUB_URL }}
-    ALLURE_HUB_TOKEN: ${{ secrets.ALLURE_HUB_TOKEN }}   # API key
+    BEARER_TOKEN: ${{ secrets.ALLURE_HUB_TOKEN }}   # API key
+    ENV_ID: default
     PROJECT_ID: my-project
     BUILD_ID: ${{ github.run_number }}
   run: bash upload-results.sh

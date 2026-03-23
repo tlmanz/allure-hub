@@ -86,7 +86,7 @@ func (db *DB) InList(n int) string {
 	if n == 0 {
 		return ""
 	}
-	return db.Ph("?" + strings.Repeat(",?", n-1))
+	return "?" + strings.Repeat(",?", n-1)
 }
 
 // parseTimestamp parses a timestamp string written by either Go (RFC3339) or
