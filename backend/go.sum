@@ -76,10 +76,8 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tlmanz/authkit v0.0.3 h1:cnl0TDmcPCdof0MjTjTwBBzwYaQpt0xHG8qUZ1PJEz0=
-github.com/tlmanz/authkit v0.0.3/go.mod h1:d9nlzZWEzny/M4+0AGlSeChqnB3Ixujzk5meBjnjteU=
-github.com/tlmanz/authkit v0.0.4-0.20260323092640-edd8c0eaa017 h1:LVHBGJVGDLZdPJaVJwDTJlKkDtZmKOWT5LJ2Gkt5re0=
-github.com/tlmanz/authkit v0.0.4-0.20260323092640-edd8c0eaa017/go.mod h1:d9nlzZWEzny/M4+0AGlSeChqnB3Ixujzk5meBjnjteU=
+github.com/tlmanz/authkit v0.0.4 h1:tMVvcFpwPuZPsCy9odvQ3t8K9jspo9BwC8PGhZwMQ6M=
+github.com/tlmanz/authkit v0.0.4/go.mod h1:d9nlzZWEzny/M4+0AGlSeChqnB3Ixujzk5meBjnjteU=
 github.com/tlmanz/goconf v0.1.2 h1:gArPXuYxtt+CW6du1cxmkGendVhAAtsK65lbTVXZ7aU=
 github.com/tlmanz/goconf v0.1.2/go.mod h1:ep3532ZJVGkh/uRE6qFJcxiODp6k9ZVRxqvMMa6GMOM=
 github.com/tlmanz/hush v0.2.3 h1:YI02P6dUpSQyhm9FIpMaoXI9JSeK8VPyjfZrWX95Mwo=

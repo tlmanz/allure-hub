@@ -6,7 +6,7 @@ require (
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/tlmanz/authkit v0.0.4-0.20260323092640-edd8c0eaa017
+	github.com/tlmanz/authkit v0.0.4
 	github.com/tlmanz/goconf v0.1.2
 	go.uber.org/zap v1.27.1
 	gopkg.in/yaml.v3 v3.0.1
