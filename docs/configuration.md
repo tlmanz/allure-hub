@@ -58,9 +58,36 @@ Migrations run automatically on startup for both drivers.
 | `SECURE_COOKIE` | `false` | Set `true` in production (HTTPS only) |
 | `GOOGLE_CLIENT_ID` | — | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret |
-| `AUTH_POLICY_FILE` | `./policy.yaml` | Path to RBAC policy file |
+| `AUTH_POLICY_FILE` | `./policy.yaml` | Path to RBAC policy file (used as baseline — see below) |
 | `AUTH_AFTER_LOGIN_URL` | `/` | Redirect URL after successful login |
 | `AUTH_AFTER_LOGOUT_URL` | `/login` | Redirect URL after logout |
+
+## RBAC
+
+Allure Hub uses a **layered RBAC** system:
+
+1. `policy.yaml` defines roles, their permissions, and initial members. This is the baseline and is hot-reloaded every 30 seconds.
+2. Role overrides set through the Settings UI are stored in the `role_overrides` database table and take precedence over the YAML baseline.
+
+This means you can bootstrap roles via `policy.yaml` and manage individual user roles at runtime through the UI without editing files or redeploying.
+
+**Changing a user's role** requires the `admin` role. The change takes effect on the user's next login — their current session is invalidated immediately so they are forced to re-authenticate with the new role.
+
+**Resetting a user to the YAML baseline** is done by removing their override (the "Reset to default" action in the Settings UI).
+
+### role_overrides table
+
+The migration that creates this table runs automatically on startup. For reference:
+
+```sql
+CREATE TABLE role_overrides (
+    email       TEXT PRIMARY KEY,
+    role        TEXT NOT NULL,
+    permissions JSONB NOT NULL DEFAULT '[]'
+);
+```
+
+For PostgreSQL deployments this table is created in the same database as the rest of the schema.
 
 ## Rate limiting
 

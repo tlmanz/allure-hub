@@ -58,7 +58,7 @@ Mount `/data` to preserve reports and the database across container restarts:
 -v /srv/allure-hub/data:/data
 ```
 
-The RBAC `policy.yaml` can also be stored there and referenced via `AUTH_POLICY_FILE=/data/policy.yaml`.
+The RBAC `policy.yaml` baseline can be stored there and referenced via `AUTH_POLICY_FILE=/data/policy.yaml`. Role overrides set through the Settings UI are stored in the database automatically — no file changes needed at runtime.
 
 ## Docker Compose example
 
@@ -83,6 +83,51 @@ services:
 
 volumes:
   allure_data:
+```
+
+## Docker Compose with PostgreSQL
+
+For production deployments, PostgreSQL is recommended. All schema migrations (including the `role_overrides` table) run automatically on startup.
+
+```yaml
+services:
+  allure-hub:
+    image: ghcr.io/tlmanz/allure-hub:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - allure_data:/data
+    environment:
+      SESSION_SECRET: "${SESSION_SECRET}"
+      BASE_URL: "https://allure.example.com"
+      SECURE_COOKIE: "true"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      DB_DRIVER: "postgres"
+      DB_DSN: "postgres://allure:${POSTGRES_PASSWORD}@db:5432/allure_hub?sslmode=disable"
+      DATA_DIR: "/data"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: allure_hub
+      POSTGRES_USER: allure
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U allure -d allure_hub"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  allure_data:
+  pg_data:
 ```
 
 ## Push to registry
