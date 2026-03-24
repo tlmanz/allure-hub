@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // EnvironmentRepository is the persistence contract for Environment aggregates.
 type EnvironmentRepository interface {
@@ -36,6 +39,8 @@ type BuildRepository interface {
 	StatsForProject(ctx context.Context, envID, projectID string) (*BuildStats, error)
 	Delete(ctx context.Context, envID, projectID, buildID string) error
 	DeleteByProject(ctx context.Context, envID, projectID string) error
+	// ListExpiredBuilds returns builds whose created_at is older than cutoff.
+	ListExpiredBuilds(ctx context.Context, cutoff time.Time) ([]*Build, error)
 }
 
 // UploadSessionRepository is the persistence contract for UploadSession aggregates.
@@ -63,6 +68,19 @@ type TrackedUserRepository interface {
 	// substring). An empty query matches all users.
 	Search(ctx context.Context, query string, limit, offset int) ([]*TrackedUser, error)
 	CountSearch(ctx context.Context, query string) (int, error)
+}
+
+// SystemSettingsRepository is the persistence contract for system-level key-value settings.
+type SystemSettingsRepository interface {
+	// Get returns the value for key, or ("", nil) when the key is absent.
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+}
+
+// CleanupRunRepository persists the outcome of each cleanup sweep.
+type CleanupRunRepository interface {
+	Save(ctx context.Context, r *CleanupRun) error
+	ListRecent(ctx context.Context, limit int) ([]*CleanupRun, error)
 }
 
 // APIKeyRepository is the persistence contract for API keys.

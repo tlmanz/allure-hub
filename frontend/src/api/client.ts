@@ -1,4 +1,4 @@
-import type { Environment, Project, Report, ReportStats, PagedReports, PagedAPIKeys, PagedUsers, UploadSession, APIKey } from '../types'
+import type { Environment, Project, Report, ReportStats, PagedReports, PagedAPIKeys, PagedUsers, UploadSession, APIKey, RetentionSettings, CleanupRun } from '../types'
 
 const BASE = '/api'
 
@@ -130,6 +130,20 @@ export const api = {
 
   resetUserRole: (email: string) =>
     request<void>(`/settings/users/${enc(email)}/role`, { method: 'DELETE' }),
+
+  // Settings — data retention
+  getRetentionSettings: () =>
+    request<RetentionSettings>('/settings/retention'),
+
+  getCleanupRuns: (limit = 5) =>
+    request<CleanupRun[]>(`/settings/retention/runs?limit=${limit}`).then(d => d ?? []),
+
+  setRetentionSettings: (settings: RetentionSettings) =>
+    request<void>('/settings/retention', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    }),
 
   // Chunked upload — drives Init → Chunks → Complete → Generate.
   // Pass an AbortSignal to cancel mid-flight (M-27).

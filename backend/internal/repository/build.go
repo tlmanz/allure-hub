@@ -299,6 +299,36 @@ func (r *BuildRepo) DeleteByProject(ctx context.Context, envID, projectID string
 	return nil
 }
 
+// ListExpiredBuilds returns all builds whose created_at is older than cutoff,
+// selecting only the fields needed by the cleanup worker.
+func (r *BuildRepo) ListExpiredBuilds(ctx context.Context, cutoff time.Time) ([]*domain.Build, error) {
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at
+		          FROM builds WHERE created_at < ?
+		          ORDER BY created_at ASC`),
+		cutoff.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list expired builds: %w", err)
+	}
+	defer rows.Close()
+
+	var builds []*domain.Build
+	for rows.Next() {
+		var b domain.Build
+		var createdAt string
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt); err != nil {
+			return nil, fmt.Errorf("repository: scan expired build: %w", err)
+		}
+		var parseErr error
+		if b.CreatedAt, parseErr = parseBuildTime(createdAt); parseErr != nil {
+			return nil, parseErr
+		}
+		builds = append(builds, &b)
+	}
+	return builds, rows.Err()
+}
+
 // parseBuildTime parses a timestamp stored for a Build row, accepting both
 // RFC3339 and SQLite's legacy datetime format (M-11).
 func parseBuildTime(s string) (time.Time, error) {

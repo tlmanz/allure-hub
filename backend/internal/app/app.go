@@ -23,12 +23,13 @@ import (
 
 // App holds all wired application components and manages the server lifecycle.
 type App struct {
-	log      *zap.Logger
-	db       *repository.DB
-	srv      *http.Server
-	cfg      config.Config
-	auth     *authkit.Auth
-	provider *authkit.LayeredPolicyProvider
+	log        *zap.Logger
+	db         *repository.DB
+	srv        *http.Server
+	cfg        config.Config
+	auth       *authkit.Auth
+	provider   *authkit.LayeredPolicyProvider
+	cleanupSvc *usecase.CleanupService
 }
 
 // New wires all dependencies — repositories, services, HTTP router — and
@@ -53,6 +54,8 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	sessionRepo := repository.NewUploadSessionRepo(db)
 	userRepo := repository.NewTrackedUserRepo(db)
 	apiKeyRepo := repository.NewAPIKeyRepo(db)
+	settingsRepo := repository.NewSystemSettingsRepo(db)
+	cleanupRunRepo := repository.NewCleanupRunRepo(db)
 
 	// ── Infrastructure adapters ───────────────────────────────────────────────
 	fs := storage.NewFilesystem(
@@ -75,6 +78,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	projectSvc := usecase.NewProjectService(projectRepo, buildRepo, sessionRepo, fs)
 	reportSvc := usecase.NewReportService(buildRepo, sessionRepo, bus, fs, gen, log)
 	uploadSvc := usecase.NewUploadService(reportSvc, fs, sessionRepo, envRepo, projectRepo, bus, cfg.Storage.AssembleTempDir, log)
+	cleanupSvc := usecase.NewCleanupService(buildRepo, settingsRepo, cleanupRunRepo, fs, log)
 
 	// ── API keys ──────────────────────────────────────────────────────────────
 	// Initialised before auth so keyStore can be passed as APIKeyValidator.
@@ -122,6 +126,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		sessionRepo, bus,
 		auth, provider,
 		apiKeySvc, userRepo,
+		cleanupSvc,
 		transport.RouterConfig{
 			DataDir:        cfg.Storage.DataDir,
 			WebDir:         cfg.Server.WebDir,
@@ -146,7 +151,36 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	}
 	srv.RegisterOnShutdown(bus.Shutdown)
 
-	return &App{log: log, db: db, srv: srv, cfg: cfg, auth: auth, provider: provider}, nil
+	return &App{log: log, db: db, srv: srv, cfg: cfg, auth: auth, provider: provider, cleanupSvc: cleanupSvc}, nil
+}
+
+// runCleanupWorker runs an initial sweep after a short startup delay then ticks
+// on cfg.Cleanup.Interval, calling CleanupService.Sweep each cycle.
+func (a *App) runCleanupWorker(ctx context.Context) {
+	// Short delay so DB migrations settle before the first sweep.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(30 * time.Second):
+	}
+
+	if err := a.cleanupSvc.Sweep(ctx); err != nil {
+		a.log.Error("cleanup sweep failed", zap.Error(err))
+	}
+
+	ticker := time.NewTicker(a.cfg.Cleanup.Interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			a.log.Info("cleanup worker stopped")
+			return
+		case <-ticker.C:
+			if err := a.cleanupSvc.Sweep(ctx); err != nil {
+				a.log.Error("cleanup sweep failed", zap.Error(err))
+			}
+		}
+	}
 }
 
 // Run starts the HTTP server and blocks until ctx is cancelled (e.g. SIGINT),
@@ -154,6 +188,10 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 // It closes the database connection before returning.
 func (a *App) Run(ctx context.Context) error {
 	go a.auth.WatchRBAC(ctx, 30*time.Second)
+
+	if a.cfg.Cleanup.Interval > 0 {
+		go a.runCleanupWorker(ctx)
+	}
 
 	errCh := make(chan error, 1)
 	go func() {

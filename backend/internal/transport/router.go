@@ -12,9 +12,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tlmanz/allure-hub/internal/domain"
-	"github.com/tlmanz/allure-hub/internal/usecase"
 	"github.com/tlmanz/allure-hub/internal/transport/handler"
 	"github.com/tlmanz/allure-hub/internal/transport/middleware"
+	"github.com/tlmanz/allure-hub/internal/usecase"
 	localauth "github.com/tlmanz/allure-hub/pkg/authkit"
 	kit "github.com/tlmanz/authkit"
 )
@@ -47,6 +47,7 @@ func NewRouter(
 	provider *kit.LayeredPolicyProvider,
 	apiKeySvc *usecase.APIKeyService,
 	userRepo domain.TrackedUserRepository,
+	cleanupSvc *usecase.CleanupService,
 	rcfg RouterConfig,
 	log *zap.Logger,
 ) http.Handler {
@@ -57,7 +58,7 @@ func NewRouter(
 	rh := handler.NewReportHandler(reportSvc, uploadSvc, rcfg.MaxChunkBytes, rcfg.MaxUploadBytes, log)
 	uh := handler.NewUploadSessionHandler(sessionRepo, uploadSvc, bus, log)
 	hh := handler.NewHealthHandler(db)
-	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, provider, log)
+	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, provider, cleanupSvc, log)
 
 	// Auth routes — OAuth flow (no API key auth here)
 	mux.HandleFunc("GET /auth/{provider}", auth.BeginAuth)
@@ -108,6 +109,9 @@ func NewRouter(
 	mux.Handle("GET /api/settings/users", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListUsers)))
 	mux.Handle("PATCH /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetUserRole)))
 	mux.Handle("DELETE /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ResetUserRole)))
+	mux.Handle("GET /api/settings/retention", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetRetention)))
+	mux.Handle("PUT /api/settings/retention", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetRetention)))
+	mux.Handle("GET /api/settings/retention/runs", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetCleanupRuns)))
 
 	// Health + version (unprotected)
 	mux.HandleFunc("GET /api/healthz", hh.Check)
