@@ -2,6 +2,8 @@
 
 Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and all Allure reports from a single container — no nginx sidecar required.
 
+![Allure Hub UI](image.png)
+
 ## Features
 
 - **Multi-environment / multi-project** — organise reports by environment (staging, production) and project
