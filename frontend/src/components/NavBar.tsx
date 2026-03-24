@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
-import { APP_NAME } from '../design-system/tokens'
 import { useUpload } from '../context/UploadContext'
 import { useHealthStatus } from '../hooks/useHealthStatus'
 import { useAuth } from '../context/AuthContext'
@@ -76,9 +75,13 @@ const NavBar: React.FC = React.memo(() => {
     >
       {/* Left: brand + nav links */}
       <div className="flex items-center gap-8">
-        <span className="text-xl font-black text-primary tracking-tighter font-headline leading-none select-none">
-          {APP_NAME}
-        </span>
+        <Link to="/" className="flex items-center gap-2 select-none">
+          <img src="/images/logo.png" alt="" className="h-7" />
+          <span className="text-xl font-black tracking-tighter font-headline leading-none">
+            <span className="text-gray-900 dark:text-white">Allure</span>
+            <span className="text-gray-500 dark:text-gray-400">Hub</span>
+          </span>
+        </Link>
 
         <div className="flex items-center gap-1.5">
           {NAV_ITEMS.map(({ label, to, matchPrefix }) => {

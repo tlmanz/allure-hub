@@ -4,7 +4,9 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
 COPY frontend/ .
-RUN npm run build
+ARG VERSION=dev
+RUN sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json && \
+    npm run build
 
 # Stage 2 — compile the Go binary
 FROM golang:1.25-alpine3.23 AS go-builder

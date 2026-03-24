@@ -91,6 +91,30 @@ export default {
         xl: '16px',
         full: '9999px',
       },
+      keyframes: {
+        'fade-in-up': {
+          '0%':   { opacity: '0', transform: 'translateY(16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-in': {
+          '0%':   { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%':      { transform: 'translateY(-10px)' },
+        },
+        'scale-in': {
+          '0%':   { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        'fade-in-up':   'fade-in-up 0.5s ease-out both',
+        'fade-in':      'fade-in 0.6s ease-out both',
+        'float':        'float 6s ease-in-out infinite',
+        'scale-in':     'scale-in 0.4s ease-out both',
+      },
       boxShadow: {
         'card':   '0 20px 40px rgba(0,0,0,0.40)',
         'medium': '0 20px 40px rgba(0,0,0,0.40)',

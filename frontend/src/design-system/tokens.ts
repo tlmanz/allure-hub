@@ -1,5 +1,6 @@
-export const APP_VERSION = 'v2.4.1' as const
-export const APP_VERSION_STABLE = 'v2.4.1-stable' as const
+declare const __APP_VERSION__: string
+export const APP_VERSION = `v${__APP_VERSION__}`
+export const APP_VERSION_STABLE = `v${__APP_VERSION__}-stable`
 export const APP_NAME = 'allure-hub' as const
 
 export const COLOR = {
