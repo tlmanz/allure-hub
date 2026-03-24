@@ -2,13 +2,37 @@
 
 allure-hub supports two authentication methods: **Google OAuth** (for browser sessions) and **API keys** (for CI/CD and programmatic access). Both methods use the same RBAC permission model.
 
+```mermaid
+flowchart LR
+    subgraph Browser
+        A[User] -->|Google OAuth| B[Session cookie]
+    end
+    subgraph CI/CD
+        C[Pipeline] -->|"Bearer ah_..."| D[API key]
+    end
+    B --> E["RBAC\npermission check"]
+    D --> E
+    E --> F[API access]
+```
+
 ## Google OAuth setup
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials → **Create OAuth 2.0 Client ID**
+1. Go to [Google Cloud Console](https://console.cloud.google.com) > APIs & Services > Credentials > **Create OAuth 2.0 Client ID**
 2. Application type: **Web application**
 3. Add authorised redirect URI:
-   - Development: `http://localhost:8080/auth/google/callback`
-   - Production: `https://your-domain.com/auth/google/callback`
+
+    === "Development"
+
+        ```
+        http://localhost:8080/auth/google/callback
+        ```
+
+    === "Production"
+
+        ```
+        https://your-domain.com/auth/google/callback
+        ```
+
 4. Copy the client ID and secret into `backend/.env`:
 
 ```bash
@@ -58,9 +82,9 @@ default_role: viewer
 
 | Role | Permissions | Can upload | Can manage |
 |---|---|---|---|
-| `admin` | `*` | Yes | Yes |
-| `developer` | `view`, `upload` | Yes | No |
-| `viewer` | `view` | No | No |
+| `admin` | `*` | :material-check: | :material-check: |
+| `developer` | `view`, `upload` | :material-check: | :material-close: |
+| `viewer` | `view` | :material-close: | :material-close: |
 
 ## Auth endpoints
 
@@ -71,17 +95,17 @@ default_role: viewer
 | `POST` | `/auth/logout` | Clear session, redirect to `AUTH_AFTER_LOGOUT_URL` |
 | `GET` | `/auth/me` | Returns current user JSON or `401` |
 
-### `/auth/me` response
+??? example "`/auth/me` response"
 
-```json
-{
-  "email": "alice@example.com",
-  "name": "Alice",
-  "avatarUrl": "https://lh3.googleusercontent.com/...",
-  "provider": "google",
-  "role": "admin"
-}
-```
+    ```json
+    {
+      "email": "alice@example.com",
+      "name": "Alice",
+      "avatarUrl": "https://lh3.googleusercontent.com/...",
+      "provider": "google",
+      "role": "admin"
+    }
+    ```
 
 ## Frontend permission gating
 
@@ -111,7 +135,8 @@ Keys are prefixed with `ah_` followed by 64 hex characters (256 bits of entropy)
 ah_a3f9c2d1e8b047f6a1c3d5e7f9b2a4c6d8e0f2a4c6d8e0f2a4c6d8e0f2a4c6
 ```
 
-The `ah_` prefix aids secret scanning tools in detecting leaked keys.
+!!! info
+    The `ah_` prefix aids secret scanning tools (e.g. GitHub, GitGuardian) in detecting leaked keys.
 
 ### Using an API key
 
@@ -126,17 +151,26 @@ curl -H "Authorization: Bearer ah_..." \
 
 ### Managing API keys
 
-API keys are managed from the **Settings → API Keys** page (requires `manage` permission and an active browser session). Keys cannot be used to manage other keys.
+API keys are managed from the **Settings > API Keys** page (requires `manage` permission and an active browser session). Keys cannot be used to manage other keys.
 
 You can also manage keys via the API — see [Settings endpoints](api.md#settings).
 
 ### Key lifecycle
 
+```mermaid
+stateDiagram-v2
+    [*] --> Active: Create
+    Active --> Revoked: Soft delete
+    Active --> Deleted: Permanent delete
+    Revoked --> Deleted: Permanent delete
+    Deleted --> [*]
+```
+
 | State | Description |
 |---|---|
-| Active | Key is valid and can authenticate requests |
-| Revoked | Soft-deleted — key is rejected but the record is retained for audit |
-| Deleted | Permanently removed |
+| **Active** | Key is valid and can authenticate requests |
+| **Revoked** | Soft-deleted — key is rejected but the record is retained for audit |
+| **Deleted** | Permanently removed |
 
 The last-used timestamp is updated asynchronously on each successful authentication.
 
@@ -146,7 +180,9 @@ When a request is authenticated with an API key, the uploader is recorded as `ap
 
 ## Session security
 
-- Sessions are stored in an **encrypted cookie** (AES-GCM via gorilla/securecookie)
-- Set `SECURE_COOKIE=true` in production — requires HTTPS
-- Generate a strong secret: `openssl rand -hex 32`
-- The secret must remain stable across restarts (changing it invalidates all sessions)
+!!! danger "Production checklist"
+    - Set `SECURE_COOKIE=true` — requires HTTPS
+    - Generate a strong secret: `openssl rand -hex 32`
+    - The secret must remain stable across restarts (changing it invalidates all sessions)
+
+Sessions are stored in an **encrypted cookie** (AES-GCM via gorilla/securecookie).

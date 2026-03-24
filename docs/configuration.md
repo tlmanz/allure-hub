@@ -23,6 +23,9 @@ All settings are loaded from environment variables. In local development, place 
 | `MAX_DECOMPRESSED_BYTES` | `1610612736` | 1.5 GB decompressed cap (zip-bomb protection) |
 | `MAX_ZIP_ENTRIES` | `10000` | Max files in a zip (inode exhaustion protection) |
 
+!!! warning "Upload limits"
+    If uploads fail with `413` or timeout errors, increase `MAX_UPLOAD_BYTES`, `MAX_DECOMPRESSED_BYTES`, and `READ_TIMEOUT` accordingly.
+
 ## Database
 
 | Variable | Default | Description |
@@ -31,12 +34,19 @@ All settings are loaded from environment variables. In local development, place 
 | `DB_DSN` | `./data/allure-hub.db` | SQLite path or Postgres DSN |
 | `DB_MAX_OPEN_CONNS` | `25` | Connection pool size |
 
-**PostgreSQL DSN example:**
+=== "SQLite (default)"
 
-```
-DB_DRIVER=postgres
-DB_DSN=postgres://user:pass@host:5432/allure_hub?sslmode=require
-```
+    ```bash
+    DB_DRIVER=sqlite
+    DB_DSN=/data/allure-hub.db
+    ```
+
+=== "PostgreSQL"
+
+    ```bash
+    DB_DRIVER=postgres
+    DB_DSN=postgres://user:pass@host:5432/allure_hub?sslmode=require
+    ```
 
 Migrations run automatically on startup for both drivers.
 
@@ -66,28 +76,37 @@ Migrations run automatically on startup for both drivers.
 
 Allure Hub uses a **layered RBAC** system:
 
+```mermaid
+flowchart LR
+    A["policy.yaml\n(baseline)"] --> C{"Role resolver"}
+    B["role_overrides\n(database)"] --> C
+    C --> D["Effective role"]
+    style B fill:#f9a825,color:#000
+```
+
 1. `policy.yaml` defines roles, their permissions, and initial members. This is the baseline and is hot-reloaded every 30 seconds.
 2. Role overrides set through the Settings UI are stored in the `role_overrides` database table and take precedence over the YAML baseline.
 
-This means you can bootstrap roles via `policy.yaml` and manage individual user roles at runtime through the UI without editing files or redeploying.
+!!! tip
+    You can bootstrap roles via `policy.yaml` and manage individual user roles at runtime through the UI without editing files or redeploying.
 
 **Changing a user's role** requires the `admin` role. The change takes effect on the user's next login — their current session is invalidated immediately so they are forced to re-authenticate with the new role.
 
 **Resetting a user to the YAML baseline** is done by removing their override (the "Reset to default" action in the Settings UI).
 
-### role_overrides table
+??? note "role_overrides table schema"
 
-The migration that creates this table runs automatically on startup. For reference:
+    The migration that creates this table runs automatically on startup. For reference:
 
-```sql
-CREATE TABLE role_overrides (
-    email       TEXT PRIMARY KEY,
-    role        TEXT NOT NULL,
-    permissions JSONB NOT NULL DEFAULT '[]'
-);
-```
+    ```sql
+    CREATE TABLE role_overrides (
+        email       TEXT PRIMARY KEY,
+        role        TEXT NOT NULL,
+        permissions JSONB NOT NULL DEFAULT '[]'
+    );
+    ```
 
-For PostgreSQL deployments this table is created in the same database as the rest of the schema.
+    For PostgreSQL deployments this table is created in the same database as the rest of the schema.
 
 ## Rate limiting
 
@@ -96,6 +115,9 @@ For PostgreSQL deployments this table is created in the same database as the res
 | `RATE_LIMIT_RATE` | `20` | Tokens per second per IP |
 | `RATE_LIMIT_BURST` | `60` | Burst capacity |
 | `TRUST_PROXY` | `false` | Trust `X-Forwarded-For` (enable behind a reverse proxy) |
+
+!!! warning
+    Always set `TRUST_PROXY=true` when running behind a reverse proxy (nginx, Caddy, cloud LB), otherwise rate limiting will apply to the proxy IP instead of individual clients.
 
 ## CORS
 

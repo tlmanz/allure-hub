@@ -2,31 +2,31 @@
 
 ## Prerequisites
 
-| Tool | Version |
-|---|---|
-| Go | 1.22+ |
-| Node | 20+ |
-| Allure CLI | 3.x (`npm i -g allure`) |
+| Tool | Version | Install |
+|---|---|---|
+| Go | 1.22+ | [go.dev](https://go.dev/dl/) |
+| Node | 20+ | [nodejs.org](https://nodejs.org/) |
+| Allure CLI | 3.x | `npm i -g allure` |
 
 ## Local development
 
-**Terminal 1 — backend**
+=== "Terminal 1 — Backend"
 
-```bash
-cd backend
-cp .env.example .env   # fill in SESSION_SECRET and Google OAuth credentials
-make run
-```
+    ```bash
+    cd backend
+    cp .env.example .env   # fill in SESSION_SECRET and Google OAuth credentials
+    make run
+    ```
 
-The backend listens on `:8080`. It serves `/api/*`, `/auth/*`, and `/reports/*`.
+    The backend listens on `:8080`. It serves `/api/*`, `/auth/*`, and `/reports/*`.
 
-**Terminal 2 — frontend**
+=== "Terminal 2 — Frontend"
 
-```bash
-make dev-frontend
-```
+    ```bash
+    make dev-frontend
+    ```
 
-Vite dev server starts on `:5173` and proxies `/api`, `/auth`, and `/reports` to `:8080`.
+    Vite dev server starts on `:5173` and proxies `/api`, `/auth`, and `/reports` to `:8080`.
 
 Open [http://localhost:5173](http://localhost:5173) and sign in with Google.
 
@@ -44,6 +44,11 @@ AUTH_POLICY_FILE=./policy.yaml
 AUTH_AFTER_LOGIN_URL=http://localhost:5173/
 AUTH_AFTER_LOGOUT_URL=http://localhost:5173/login
 ```
+
+!!! tip "Generate a session secret"
+    ```bash
+    openssl rand -hex 32
+    ```
 
 ## RBAC policy
 
@@ -65,18 +70,23 @@ roles:
 default_role: viewer
 ```
 
-See [Authentication](authentication.md) for full RBAC details.
+!!! info
+    See [Authentication](authentication.md) for full RBAC details including runtime role overrides via the Settings UI.
 
 ## Production build
 
-```bash
-# Build frontend + backend binary
-make build
+=== "Binary"
 
-# Or build + push Docker image
-make docker-build IMAGE=myregistry/allure-hub TAG=v1.0.0
-make docker-push IMAGE=myregistry/allure-hub TAG=v1.0.0
-```
+    ```bash
+    make build
+    ```
+
+=== "Docker"
+
+    ```bash
+    make docker-build IMAGE=myregistry/allure-hub TAG=v1.0.0
+    make docker-push IMAGE=myregistry/allure-hub TAG=v1.0.0
+    ```
 
 ## Sample Java app
 
@@ -87,22 +97,22 @@ make docker-push IMAGE=myregistry/allure-hub TAG=v1.0.0
 make sample-run ALLURE_HUB_URL=http://localhost:8080
 ```
 
-### GitHub Actions example
+??? example "GitHub Actions workflow"
 
-```yaml
-- name: Run tests
-  run: mvn test
-  working-directory: sample-java-app
+    ```yaml
+    - name: Run tests
+      run: mvn test
+      working-directory: sample-java-app
 
-- name: Upload to allure-hub
-  env:
-    ALLURE_HUB_URL: ${{ secrets.ALLURE_HUB_URL }}
-    BEARER_TOKEN: ${{ secrets.ALLURE_HUB_TOKEN }}   # API key
-    ENV_ID: default
-    PROJECT_ID: my-project
-    BUILD_ID: ${{ github.run_number }}
-  run: bash upload-results.sh
-  working-directory: sample-java-app
-```
+    - name: Upload to allure-hub
+      env:
+        ALLURE_HUB_URL: ${{ secrets.ALLURE_HUB_URL }}
+        BEARER_TOKEN: ${{ secrets.ALLURE_HUB_TOKEN }}   # API key
+        ENV_ID: default
+        PROJECT_ID: my-project
+        BUILD_ID: ${{ github.run_number }}
+      run: bash upload-results.sh
+      working-directory: sample-java-app
+    ```
 
-Create an API key from **Settings → API Keys** (requires `manage` permission) and store the plaintext value as a repository secret. See [API key authentication](authentication.md#api-key-authentication) for details.
+    Create an API key from **Settings > API Keys** (requires `manage` permission) and store the plaintext value as a repository secret. See [API key authentication](authentication.md#api-key-authentication) for details.

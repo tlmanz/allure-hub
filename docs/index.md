@@ -6,44 +6,65 @@ Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and 
 
 ## Features
 
-- **Multi-environment / multi-project** — organise reports by environment (staging, production) and project
-- **Two upload strategies** — single streaming upload or chunked upload for large files
-- **Live upload tracking** — real-time progress via SSE, visible across all connected clients
-- **Allure 3 reports** — automatic history stitching for trend charts across builds
-- **Google OAuth + RBAC** — role-based access: `admin`, `developer`, `viewer`
-- **API key authentication** — issue scoped keys for CI pipelines; keys carry roles and are tracked with last-used timestamps
-- **Upload attribution** — every build and upload session records who triggered it (OAuth email or `apikey:<name>`)
-- **Single container** — Go binary + Allure CLI + React SPA in one image
-- **SQLite or PostgreSQL** — SQLite for single-node; Postgres for HA
+- :material-folder-multiple: **Multi-environment / multi-project** — organise reports by environment (staging, production) and project
+- :material-upload: **Two upload strategies** — single streaming upload or chunked upload for large files
+- :material-progress-upload: **Live upload tracking** — real-time progress via SSE, visible across all connected clients
+- :material-chart-line: **Allure 3 reports** — automatic history stitching for trend charts across builds
+- :material-shield-lock: **Google OAuth + RBAC** — role-based access: `admin`, `developer`, `viewer`
+- :material-key: **API key authentication** — issue scoped keys for CI pipelines; keys carry roles and are tracked with last-used timestamps
+- :material-account-check: **Upload attribution** — every build and upload session records who triggered it (OAuth email or `apikey:<name>`)
+- :material-docker: **Single container** — Go binary + Allure CLI + React SPA in one image
+- :material-database: **SQLite or PostgreSQL** — SQLite for single-node; Postgres for HA
+
+---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Transport  (internal/transport)                            │
-│  HTTP router · handlers · middleware · auth                 │
-├─────────────────────────────────────────────────────────────┤
-│  Use-cases  (internal/usecase)                              │
-│  EnvironmentService · ProjectService · ReportService        │
-│  UploadService · APIKeyService · EventBus                   │
-├─────────────────────────────────────────────────────────────┤
-│  Domain  (internal/domain)                                  │
-│  Environment · Project · Build · UploadSession             │
-│  APIKey · TrackedUser · Repository interfaces               │
-├──────────────────┬──────────────────────────────────────────┤
-│  Repository      │  Storage          │  Allure              │
-│  SQLite/Postgres │  PVC filesystem   │  CLI wrapper         │
-└──────────────────┴───────────────────┴──────────────────────┘
+```mermaid
+block-beta
+    columns 1
+    block:transport["Transport (internal/transport)"]
+        t1["HTTP router"] t2["Handlers"] t3["Middleware"] t4["Auth"]
+    end
+    block:usecase["Use-cases (internal/usecase)"]
+        u1["EnvironmentService"] u2["ProjectService"] u3["ReportService"] u4["UploadService"] u5["APIKeyService"] u6["EventBus"]
+    end
+    block:domain["Domain (internal/domain)"]
+        d1["Environment"] d2["Project"] d3["Build"] d4["UploadSession"] d5["APIKey"] d6["TrackedUser"]
+    end
+    block:infra
+        columns 3
+        r["Repository\nSQLite / Postgres"]
+        s["Storage\nPVC filesystem"]
+        a["Allure\nCLI wrapper"]
+    end
+
+    transport --> usecase --> domain --> infra
 ```
 
 ## Data layout
 
+```mermaid
+graph TD
+    data["/data/"] --> db["allure-hub.db\n(SQLite metadata)"]
+    data --> env["{environmentID}/"]
+    env --> project["{projectID}/"]
+    project --> history["history/\n(persisted for trend charts)"]
+    project --> results["results/{buildID}/\n(unzipped allure-results)"]
+    project --> reports["reports/{buildID}/\n(allure generate output)"]
+    project --> uploads["uploads/{uploadId}/\n(chunk staging, cleaned after assembly)"]
 ```
-/data/
-  allure-hub.db                  ← SQLite metadata
-  {projectID}/
-    history/                     ← persisted for trend charts
-    results/{buildID}/           ← unzipped allure-results
-    reports/{buildID}/           ← allure generate output
-    uploads/{uploadId}/          ← chunk staging (cleaned after assembly)
-```
+
+---
+
+## Quick links
+
+<div class="grid cards" markdown>
+
+- :material-rocket-launch: **[Getting Started](getting-started.md)** — local dev setup in 5 minutes
+- :material-cog: **[Configuration](configuration.md)** — all environment variables
+- :material-shield-account: **[Authentication](authentication.md)** — OAuth, RBAC, and API keys
+- :material-api: **[API Reference](api.md)** — full endpoint documentation
+- :material-docker: **[Docker Deployment](deployment/docker.md)** — production container setup
+
+</div>
