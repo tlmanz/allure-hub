@@ -9,3 +9,5 @@ backend/policy.yaml
 .mailmap
 .claude
 .k8s
+.venv
+site/

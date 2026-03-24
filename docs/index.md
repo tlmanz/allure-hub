@@ -21,25 +21,25 @@ Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and 
 ## Architecture
 
 ```mermaid
-block-beta
-    columns 1
-    block:transport["Transport (internal/transport)"]
-        t1["HTTP router"] t2["Handlers"] t3["Middleware"] t4["Auth"]
+flowchart TD
+    subgraph T["Transport — internal/transport"]
+        t1[HTTP router] --- t2[Handlers] --- t3[Middleware] --- t4[Auth]
     end
-    block:usecase["Use-cases (internal/usecase)"]
-        u1["EnvironmentService"] u2["ProjectService"] u3["ReportService"] u4["UploadService"] u5["APIKeyService"] u6["EventBus"]
+    subgraph U["Use-cases — internal/usecase"]
+        u1[EnvironmentService] --- u2[ProjectService] --- u3[ReportService]
+        u4[UploadService] --- u5[APIKeyService] --- u6[EventBus]
     end
-    block:domain["Domain (internal/domain)"]
-        d1["Environment"] d2["Project"] d3["Build"] d4["UploadSession"] d5["APIKey"] d6["TrackedUser"]
+    subgraph D["Domain — internal/domain"]
+        d1[Environment] --- d2[Project] --- d3[Build]
+        d4[UploadSession] --- d5[APIKey] --- d6[TrackedUser]
     end
-    block:infra
-        columns 3
-        r["Repository\nSQLite / Postgres"]
-        s["Storage\nPVC filesystem"]
-        a["Allure\nCLI wrapper"]
+    subgraph I["Infrastructure"]
+        r[Repository\nSQLite / Postgres]
+        s[Storage\nPVC filesystem]
+        a[Allure\nCLI wrapper]
     end
 
-    transport --> usecase --> domain --> infra
+    T --> U --> D --> I
 ```
 
 ## Data layout
