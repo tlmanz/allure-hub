@@ -90,6 +90,16 @@ type AuthConfig struct {
 	AfterLogoutURL     string `env:"AUTH_AFTER_LOGOUT_URL"    envDefault:"/login"`
 }
 
+// CleanupConfig holds startup seed values for the background report cleanup worker.
+// All three values are seeded into the system_settings DB table on first run and
+// can be overridden at runtime via the Settings API without a server restart.
+// Set CLEANUP_INTERVAL to 0 to disable the worker entirely.
+type CleanupConfig struct {
+	RetentionDays   int           `env:"CLEANUP_RETENTION_DAYS"    envDefault:"90"`
+	Interval        time.Duration `env:"CLEANUP_INTERVAL"          envDefault:"6h"`
+	DryRun          bool          `env:"CLEANUP_DRY_RUN"           envDefault:"false"`
+}
+
 // Config is the root configuration for allure-hub, assembled from environment
 // variables. Sub-structs group related settings; env var names are unchanged.
 type Config struct {
@@ -101,6 +111,7 @@ type Config struct {
 	CORS      CORSConfig
 	Log       LogConfig
 	Auth      AuthConfig
+	Cleanup   CleanupConfig
 }
 
 // Values is the package-level instance populated by Load().

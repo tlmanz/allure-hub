@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { APIKey, TrackedUser } from '../types'
+import type { APIKey, TrackedUser, RetentionSettings, CleanupRun } from '../types'
 import { formatDate } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
 import SearchInput from '../components/ui/SearchInput'
+import { useSnackbar } from '../components/ui/Snackbar'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,10 +38,7 @@ function PlaintextModal({ plaintext, onClose }: { plaintext: string; onClose: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-2xl shadow-2xl border p-6 space-y-4"
-        style={{
-          background: 'rgb(var(--color-surface-container))',
-          borderColor: 'rgb(var(--color-outline-variant) / 0.4)',
-        }}
+        style={{ background: 'rgb(var(--color-surface-container))', borderColor: 'rgb(var(--color-outline-variant) / 0.4)' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -54,7 +52,6 @@ function PlaintextModal({ plaintext, onClose }: { plaintext: string; onClose: ()
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
-
         <div className="flex items-center gap-2 bg-surface-container-lowest rounded-xl px-4 py-3 border border-outline-variant/20">
           <code className="flex-1 text-sm font-mono text-on-surface break-all select-all">{plaintext}</code>
           <button
@@ -65,11 +62,9 @@ function PlaintextModal({ plaintext, onClose }: { plaintext: string; onClose: ()
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
-
         <p className="text-xs text-on-surface-variant">
           Use this key in the <code className="font-mono bg-surface-container-high px-1 rounded">Authorization: Bearer &lt;key&gt;</code> header.
         </p>
-
         <button
           onClick={onClose}
           className="w-full py-2.5 rounded-xl bg-primary text-on-primary text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all"
@@ -115,10 +110,7 @@ function RoleDropdown({ value, onChange }: { value: Role; onChange: (r: Role) =>
       {open && (
         <div
           className="absolute left-0 top-full mt-1 z-50 rounded-xl border shadow-lg py-1 min-w-full overflow-hidden"
-          style={{
-            background: 'rgb(var(--color-surface-container))',
-            borderColor: 'rgb(var(--color-outline-variant) / 0.4)',
-          }}
+          style={{ background: 'rgb(var(--color-surface-container))', borderColor: 'rgb(var(--color-outline-variant) / 0.4)' }}
         >
           {ROLES.map(r => (
             <button
@@ -208,16 +200,14 @@ function LoadMoreButton({ remaining, loading, onClick }: { remaining: number; lo
       disabled={loading}
       className="w-full py-2.5 rounded-xl border border-outline-variant/20 text-sm text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
     >
-      {loading
-        ? 'Loading…'
-        : `Load more (${remaining} remaining)`}
+      {loading ? 'Loading…' : `Load more (${remaining} remaining)`}
     </button>
   )
 }
 
-// ── API Keys tab ──────────────────────────────────────────────────────────────
+// ── API Keys section ──────────────────────────────────────────────────────────
 
-function APIKeysTab() {
+function APIKeysSection() {
   const [keys, setKeys] = useState<APIKey[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -227,8 +217,8 @@ function APIKeysTab() {
   const [error, setError] = useState<string | null>(null)
   const [plaintext, setPlaintext] = useState<string | null>(null)
   const [actionId, setActionId] = useState<string | null>(null)
+  const { show: showAlert, SnackbarNode } = useSnackbar()
 
-  // loadPage fetches one page; append=true adds to existing list.
   const loadPage = useCallback((q: string, off: number, append: boolean) => {
     if (append) setLoadingMore(true)
     else { setLoading(true); setError(null) }
@@ -242,7 +232,6 @@ function APIKeysTab() {
       .finally(() => { setLoading(false); setLoadingMore(false) })
   }, [])
 
-  // Initial load (no debounce).
   const isFirst = useRef(true)
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; loadPage('', 0, false); return }
@@ -255,8 +244,9 @@ function APIKeysTab() {
     try {
       await api.revokeAPIKey(id)
       setKeys(prev => prev.map(k => k.id === id ? { ...k, isActive: false } : k))
+      showAlert('API key revoked successfully')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke key')
+      showAlert(e instanceof Error ? e.message : 'Failed to revoke key', 'error')
     } finally {
       setActionId(null)
     }
@@ -268,8 +258,9 @@ function APIKeysTab() {
       await api.deleteAPIKey(id)
       setKeys(prev => prev.filter(k => k.id !== id))
       setTotal(t => t - 1)
+      showAlert('API key deleted')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete key')
+      showAlert(e instanceof Error ? e.message : 'Failed to delete key', 'error')
     } finally {
       setActionId(null)
     }
@@ -277,126 +268,162 @@ function APIKeysTab() {
 
   function handleCreated(pt: string) {
     setPlaintext(pt)
-    // Reset to first page with current search so the new key appears.
     loadPage(search, 0, false)
   }
 
   const hasMore = keys.length < total
 
   return (
-    <div className="space-y-6">
-      {/* Create form */}
-      <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10">
-        <h3 className="text-sm font-headline font-bold text-on-surface mb-4">Generate New Key</h3>
-        <CreateKeyForm onCreated={handleCreated} />
-      </div>
-
-      {/* List header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h3 className="text-sm font-headline font-bold text-on-surface">
-          Keys
-          {!loading && <span className="ml-2 text-on-surface-variant font-normal">({total})</span>}
-        </h3>
-        <SearchInput value={search} onValueChange={setSearch} placeholder="Search by name or creator…" />
-      </div>
-
-      {error && (
-        <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{error}</p>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <span className="text-on-surface-variant text-sm animate-pulse">Loading keys…</span>
+    <div className="space-y-8">
+      {/* Role reference */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">shield</span>
+          <h3 className="text-sm font-headline font-bold text-on-surface">Role Permissions</h3>
         </div>
-      ) : keys.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-surface-container-low/30 rounded-xl border border-dashed border-outline-variant/20">
-          <span className="material-symbols-outlined text-[36px] opacity-20 mb-3">key</span>
-          <p className="text-sm font-headline font-bold text-on-surface">
-            {search ? 'No keys match your search' : 'No API keys yet'}
-          </p>
-          <p className="text-xs text-on-surface-variant mt-1">
-            {search ? 'Try a different search term.' : 'Create a key above to get started.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {keys.map(k => (
-            <div
-              key={k.id}
-              className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
-                k.isActive
-                  ? 'bg-surface-container-low border-outline-variant/10'
-                  : 'bg-surface-container-lowest border-outline-variant/5 opacity-50'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full shrink-0 ${k.isActive ? 'bg-emerald-500' : 'bg-on-surface-variant/30'}`} />
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-headline font-semibold text-on-surface">{k.name}</span>
-                  <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(k.role)}`}>
-                    {k.role}
-                  </span>
-                  {!k.isActive && (
-                    <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-error/10 text-error">
-                      Revoked
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 mt-0.5 text-[11px] text-on-surface-variant font-label flex-wrap">
-                  <span>Created by {k.createdBy}</span>
-                  <span className="opacity-50">·</span>
-                  <span>{formatDate(k.createdAt)}</span>
-                  {k.lastUsedAt && (
-                    <>
-                      <span className="opacity-50">·</span>
-                      <span>Last used {formatDate(k.lastUsedAt)}</span>
-                    </>
-                  )}
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-3 gap-3">
+          {([
+            { role: 'admin',     icon: 'admin_panel_settings', color: 'text-primary',   bg: 'bg-primary/5 border-primary/15',   desc: 'Full access — manage environments, projects, keys, and users.' },
+            { role: 'developer', icon: 'code',                 color: 'text-secondary', bg: 'bg-secondary/5 border-secondary/15', desc: 'Upload results and generate reports. No management access.' },
+            { role: 'viewer',    icon: 'visibility',           color: 'text-on-surface-variant', bg: 'bg-surface-container-low border-outline-variant/10', desc: 'Read-only access to environments and reports.' },
+          ] as const).map(({ role, icon, color, bg, desc }) => (
+            <div key={role} className={`rounded-xl border p-4 ${bg}`}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`material-symbols-outlined text-[16px] ${color}`}>{icon}</span>
+                <span className={`text-xs font-label font-bold capitalize ${color}`}>{role}</span>
               </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {k.isActive && (
-                  <button
-                    onClick={() => handleRevoke(k.id)}
-                    disabled={actionId === k.id}
-                    className="px-3 py-1.5 rounded-lg text-xs font-label font-semibold text-on-surface-variant border border-outline-variant/20 hover:border-error/30 hover:text-error hover:bg-error/5 transition-colors disabled:opacity-50"
-                  >
-                    {actionId === k.id ? 'Revoking…' : 'Revoke'}
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(k.id)}
-                  disabled={actionId === k.id}
-                  className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors disabled:opacity-50"
-                  title="Delete permanently"
-                  aria-label={`Delete key ${k.name}`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">delete</span>
-                </button>
-              </div>
+              <p className="text-[11px] text-on-surface-variant leading-relaxed">{desc}</p>
             </div>
           ))}
-
-          {hasMore && (
-            <LoadMoreButton
-              remaining={total - keys.length}
-              loading={loadingMore}
-              onClick={() => loadPage(search, offset + PAGE_SIZE, true)}
-            />
-          )}
         </div>
-      )}
+      </section>
+
+      {/* Generate card */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-[18px] text-primary">add_circle</span>
+          <h3 className="text-sm font-headline font-bold text-on-surface">Generate New Key</h3>
+        </div>
+        <div className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10">
+          <p className="text-xs text-on-surface-variant mb-4">
+            Keys are shown <span className="font-semibold text-on-surface">once</span> at creation. Store them securely — they cannot be recovered.
+          </p>
+          <CreateKeyForm onCreated={handleCreated} />
+        </div>
+      </section>
+
+      {/* Manage keys card */}
+      <section>
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">vpn_key</span>
+            <h3 className="text-sm font-headline font-bold text-on-surface">
+              Active Keys
+              {!loading && <span className="ml-2 font-normal text-on-surface-variant">({total})</span>}
+            </h3>
+          </div>
+          <SearchInput value={search} onValueChange={setSearch} placeholder="Search by name or creator…" />
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 mb-3 border border-error/15">
+            <span className="material-symbols-outlined text-[14px]">error</span>
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-14 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
+            <span className="text-on-surface-variant text-sm animate-pulse">Loading keys…</span>
+          </div>
+        ) : keys.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 bg-surface-container-low/30 rounded-2xl border border-dashed border-outline-variant/20">
+            <span className="material-symbols-outlined text-[40px] text-on-surface-variant/20 mb-3">key_off</span>
+            <p className="text-sm font-headline font-bold text-on-surface">
+              {search ? 'No keys match your search' : 'No API keys yet'}
+            </p>
+            <p className="text-xs text-on-surface-variant mt-1">
+              {search ? 'Try a different search term.' : 'Generate a key above to enable CI/CD access.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {keys.map(k => (
+              <div
+                key={k.id}
+                className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
+                  k.isActive
+                    ? 'bg-surface-container-low border-outline-variant/10'
+                    : 'bg-surface-container-lowest border-outline-variant/5 opacity-50'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${k.isActive ? 'bg-emerald-500' : 'bg-on-surface-variant/30'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-headline font-semibold text-on-surface">{k.name}</span>
+                    <span className={`text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleBadge(k.role)}`}>
+                      {k.role}
+                    </span>
+                    {!k.isActive && (
+                      <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-error/10 text-error">
+                        Revoked
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-[11px] text-on-surface-variant font-label flex-wrap">
+                    <span>Created by {k.createdBy}</span>
+                    <span className="opacity-40">·</span>
+                    <span>{formatDate(k.createdAt)}</span>
+                    {k.lastUsedAt && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>Last used {formatDate(k.lastUsedAt)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {k.isActive && (
+                    <button
+                      onClick={() => handleRevoke(k.id)}
+                      disabled={actionId === k.id}
+                      className="px-3 py-1.5 rounded-lg text-xs font-label font-semibold text-on-surface-variant border border-outline-variant/20 hover:border-error/30 hover:text-error hover:bg-error/5 transition-colors disabled:opacity-50"
+                    >
+                      {actionId === k.id ? 'Revoking…' : 'Revoke'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(k.id)}
+                    disabled={actionId === k.id}
+                    className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+                    title="Delete permanently"
+                    aria-label={`Delete key ${k.name}`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+            {hasMore && (
+              <LoadMoreButton
+                remaining={total - keys.length}
+                loading={loadingMore}
+                onClick={() => loadPage(search, offset + PAGE_SIZE, true)}
+              />
+            )}
+          </div>
+        )}
+      </section>
 
       {plaintext && <PlaintextModal plaintext={plaintext} onClose={() => setPlaintext(null)} />}
+      {SnackbarNode}
     </div>
   )
 }
 
-// ── Users tab ─────────────────────────────────────────────────────────────────
+// ── Users section ─────────────────────────────────────────────────────────────
 
-function UsersTab() {
+function UsersSection() {
   const { user: me } = useAuth()
   const [users, setUsers] = useState<TrackedUser[]>([])
   const [total, setTotal] = useState(0)
@@ -407,6 +434,7 @@ function UsersTab() {
   const [error, setError] = useState<string | null>(null)
   const [savingEmail, setSavingEmail] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { show: showAlert, SnackbarNode } = useSnackbar()
 
   const isAdmin = me?.role === 'admin'
 
@@ -436,8 +464,9 @@ function UsersTab() {
     try {
       await api.setUserRole(email, role)
       setUsers(prev => prev.map(u => u.email === email ? { ...u, role } : u))
+      showAlert(`Role updated to ${role}`)
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Failed to update role')
+      showAlert(e instanceof Error ? e.message : 'Failed to update role', 'error')
     } finally {
       setSavingEmail(null)
     }
@@ -448,13 +477,13 @@ function UsersTab() {
     setActionError(null)
     try {
       await api.resetUserRole(email)
-      // Re-fetch current page so the YAML baseline role is reflected.
       const data = await api.listUsers(search, 0)
       setUsers(data.users ?? [])
       setTotal(data.total)
       setOffset(0)
+      showAlert('Role reset to baseline')
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Failed to reset role')
+      showAlert(e instanceof Error ? e.message : 'Failed to reset role', 'error')
     } finally {
       setSavingEmail(null)
     }
@@ -463,26 +492,45 @@ function UsersTab() {
   const hasMore = users.length < total
 
   return (
-    <div className="space-y-4">
-      {/* Search bar */}
+    <div className="space-y-6">
+      {/* Info callout */}
+      <div className="flex items-start gap-3 bg-surface-container-low rounded-xl px-4 py-3.5 border border-outline-variant/10">
+        <span className="material-symbols-outlined text-[18px] text-on-surface-variant mt-0.5 shrink-0">info</span>
+        <p className="text-xs text-on-surface-variant leading-relaxed">
+          Users appear here after their first login via OAuth. Role changes take effect on their <span className="font-semibold text-on-surface">next login</span>.
+          {!isAdmin && <span className="ml-1">Only admins can change roles.</span>}
+        </p>
+      </div>
+
+      {/* List header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h3 className="text-sm font-headline font-bold text-on-surface">
+        <span className="text-sm font-headline font-bold text-on-surface">
           Users
-          {!loading && <span className="ml-2 text-on-surface-variant font-normal">({total})</span>}
-        </h3>
+          {!loading && <span className="ml-2 font-normal text-on-surface-variant">({total})</span>}
+        </span>
         <SearchInput value={search} onValueChange={setSearch} placeholder="Search by name or email…" />
       </div>
 
-      {error && <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{error}</p>}
-      {actionError && <p className="text-xs text-error bg-error/10 rounded-lg px-4 py-2">{actionError}</p>}
+      {error && (
+        <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 border border-error/15">
+          <span className="material-symbols-outlined text-[14px]">error</span>
+          {error}
+        </div>
+      )}
+      {actionError && (
+        <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 border border-error/15">
+          <span className="material-symbols-outlined text-[14px]">error</span>
+          {actionError}
+        </div>
+      )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-14 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
           <span className="text-on-surface-variant text-sm animate-pulse">Loading users…</span>
         </div>
       ) : users.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-surface-container-low/30 rounded-xl border border-dashed border-outline-variant/20">
-          <span className="material-symbols-outlined text-[36px] opacity-20 mb-3">group</span>
+        <div className="flex flex-col items-center justify-center py-14 bg-surface-container-low/30 rounded-2xl border border-dashed border-outline-variant/20">
+          <span className="material-symbols-outlined text-[40px] text-on-surface-variant/20 mb-3">person_off</span>
           <p className="text-sm font-headline font-bold text-on-surface">
             {search ? 'No users match your search' : 'No users yet'}
           </p>
@@ -504,9 +552,9 @@ function UsersTab() {
               >
                 {/* Avatar */}
                 {u.avatarUrl ? (
-                  <img src={u.avatarUrl} alt={u.name} className="w-9 h-9 rounded-full shrink-0" referrerPolicy="no-referrer" />
+                  <img src={u.avatarUrl} alt={u.name} className="w-9 h-9 rounded-full shrink-0 ring-2 ring-outline-variant/20" referrerPolicy="no-referrer" />
                 ) : (
-                  <span className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold font-headline shrink-0">
+                  <span className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center text-primary text-sm font-bold font-headline shrink-0">
                     {u.name?.[0]?.toUpperCase() ?? u.email[0].toUpperCase()}
                   </span>
                 )}
@@ -518,7 +566,7 @@ function UsersTab() {
                     {isSelf && (
                       <span className="text-[10px] font-label text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded">you</span>
                     )}
-                    <span className="text-[10px] font-label text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded capitalize">
+                    <span className="text-[10px] font-label text-on-surface-variant/50 bg-surface-container px-1.5 py-0.5 rounded capitalize">
                       {u.provider}
                     </span>
                   </div>
@@ -552,9 +600,9 @@ function UsersTab() {
                 </div>
 
                 {/* Timestamps */}
-                <div className="text-right shrink-0 hidden md:block">
+                <div className="text-right shrink-0 hidden lg:block">
                   <p className="text-[11px] text-on-surface-variant font-label">Last login: {formatDate(u.lastLoginAt)}</p>
-                  <p className="text-[10px] text-on-surface-variant/60 font-label mt-0.5">First: {formatDate(u.firstLoginAt)}</p>
+                  <p className="text-[10px] text-on-surface-variant/50 font-label mt-0.5">First: {formatDate(u.firstLoginAt)}</p>
                 </div>
               </div>
             )
@@ -569,57 +617,348 @@ function UsersTab() {
           )}
         </div>
       )}
+      {SnackbarNode}
+    </div>
+  )
+}
+
+// ── Data Retention section ────────────────────────────────────────────────────
+
+function formatDuration(startedAt: string, finishedAt: string): string {
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`
+}
+
+function DataRetentionSection() {
+  const [form, setForm] = useState<RetentionSettings>({ retentionDays: 90, intervalHours: 6, dryRun: false })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [runs, setRuns] = useState<CleanupRun[]>([])
+  const [runsLoading, setRunsLoading] = useState(true)
+  const { show: showAlert, SnackbarNode } = useSnackbar()
+
+  useEffect(() => {
+    api.getRetentionSettings()
+      .then(data => setForm(data))
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load retention settings'))
+      .finally(() => setLoading(false))
+    api.getCleanupRuns(5)
+      .then(data => setRuns(data))
+      .finally(() => setRunsLoading(false))
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      await api.setRetentionSettings(form)
+      showAlert('Retention settings saved')
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to save retention settings', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-14 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
+        <span className="text-on-surface-variant text-sm animate-pulse">Loading retention settings…</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Active policy summary */}
+      <div className={`rounded-xl border px-5 py-4 flex items-start gap-4 ${
+        form.dryRun
+          ? 'bg-amber-500/5 border-amber-500/20'
+          : 'bg-primary/5 border-primary/15'
+      }`}>
+        <span className={`material-symbols-outlined text-[22px] mt-0.5 shrink-0 ${form.dryRun ? 'text-amber-500' : 'text-primary'}`}>
+          {form.dryRun ? 'warning' : 'auto_delete'}
+        </span>
+        <div>
+          <p className={`text-sm font-headline font-semibold ${form.dryRun ? 'text-amber-600 dark:text-amber-400' : 'text-on-surface'}`}>
+            {form.dryRun ? 'Dry run mode is enabled' : 'Active cleanup policy'}
+          </p>
+          <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+            {form.dryRun
+              ? 'No data will be deleted. The cleanup worker will log what it would remove but take no action.'
+              : `Reports older than ${form.retentionDays} day${form.retentionDays !== 1 ? 's' : ''} are permanently deleted. The cleanup worker runs every ${form.intervalHours} hour${form.intervalHours !== 1 ? 's' : ''}.`
+            }
+          </p>
+        </div>
+      </div>
+
+      {/* Settings form */}
+      <form onSubmit={handleSubmit} className="space-y-0">
+        <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 overflow-hidden divide-y divide-outline-variant/10">
+
+          {/* Retention Period */}
+          <div className="px-5 py-4 flex items-center justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="material-symbols-outlined text-[16px] text-on-surface-variant">history</span>
+                <p className="text-sm font-headline font-semibold text-on-surface">Retention Period</p>
+              </div>
+              <p className="text-xs text-on-surface-variant">
+                Reports older than this are permanently deleted during each cleanup sweep.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                required
+                value={form.retentionDays}
+                onChange={e => setForm(f => ({ ...f, retentionDays: Math.max(1, parseInt(e.target.value) || 1) }))}
+                className="w-20 bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface text-center outline-none focus:ring-1 focus:ring-primary/40"
+              />
+              <span className="text-sm text-on-surface-variant w-8">days</span>
+            </div>
+          </div>
+
+          {/* Cleanup Interval */}
+          <div className="px-5 py-4 flex items-center justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="material-symbols-outlined text-[16px] text-on-surface-variant">schedule</span>
+                <p className="text-sm font-headline font-semibold text-on-surface">Cleanup Interval</p>
+              </div>
+              <p className="text-xs text-on-surface-variant">
+                How frequently the cleanup worker checks for expired reports.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="number"
+                min={1}
+                max={720}
+                required
+                value={form.intervalHours}
+                onChange={e => setForm(f => ({ ...f, intervalHours: Math.max(1, parseInt(e.target.value) || 1) }))}
+                className="w-20 bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface text-center outline-none focus:ring-1 focus:ring-primary/40"
+              />
+              <span className="text-sm text-on-surface-variant w-8">hrs</span>
+            </div>
+          </div>
+
+          {/* Dry Run */}
+          <div className="px-5 py-4 flex items-center justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="material-symbols-outlined text-[16px] text-on-surface-variant">science</span>
+                <p className="text-sm font-headline font-semibold text-on-surface">Dry Run Mode</p>
+              </div>
+              <p className="text-xs text-on-surface-variant">
+                Log what would be deleted without removing anything. Safe way to verify your settings.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.dryRun}
+              onClick={() => setForm(f => ({ ...f, dryRun: !f.dryRun }))}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                form.dryRun ? 'bg-amber-500' : 'bg-outline/40'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                  form.dryRun ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 mt-4 border border-error/15">
+            <span className="material-symbols-outlined text-[14px]">error</span>
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-4">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 bg-primary text-on-primary px-5 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[16px]">{saving ? 'hourglass_empty' : 'save'}</span>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </form>
+
+      {/* Recent Cleanup Runs */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">history</span>
+          <h3 className="text-sm font-headline font-bold text-on-surface">Recent Cleanup Runs</h3>
+          <span className="text-xs text-on-surface-variant/60 font-label">last 5</span>
+        </div>
+
+        {runsLoading ? (
+          <div className="flex items-center justify-center py-10 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
+            <span className="text-on-surface-variant text-sm animate-pulse">Loading runs…</span>
+          </div>
+        ) : runs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 bg-surface-container-low/30 rounded-2xl border border-dashed border-outline-variant/20">
+            <span className="material-symbols-outlined text-[36px] text-on-surface-variant/20 mb-2">schedule</span>
+            <p className="text-sm font-headline font-bold text-on-surface">No runs yet</p>
+            <p className="text-xs text-on-surface-variant mt-1">Cleanup runs will appear here after the first sweep.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {runs.map(run => (
+              <div
+                key={run.id}
+                className={`rounded-xl border px-4 py-3.5 ${
+                  run.status === 'failed'
+                    ? 'bg-error/5 border-error/15'
+                    : run.dryRun
+                    ? 'bg-amber-500/5 border-amber-500/15'
+                    : 'bg-surface-container-low border-outline-variant/10'
+                }`}
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Status icon */}
+                  <span className={`material-symbols-outlined text-[18px] shrink-0 ${
+                    run.status === 'failed' ? 'text-error' : 'text-emerald-500'
+                  }`}>
+                    {run.status === 'failed' ? 'cancel' : 'check_circle'}
+                  </span>
+
+                  {/* Status + dry-run badge */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className={`text-sm font-headline font-semibold capitalize ${
+                      run.status === 'failed' ? 'text-error' : 'text-on-surface'
+                    }`}>
+                      {run.status}
+                    </span>
+                    {run.dryRun && (
+                      <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        dry run
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Stats */}
+                  {run.status !== 'failed' && (
+                    <div className="flex items-center gap-3 text-[11px] text-on-surface-variant font-label shrink-0">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">delete</span>
+                        {run.deletedCount} deleted
+                      </span>
+                      {run.skippedCount > 0 && (
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <span className="material-symbols-outlined text-[12px]">warning</span>
+                          {run.skippedCount} skipped
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Duration */}
+                  <span className="text-[11px] text-on-surface-variant/60 font-label shrink-0">
+                    {formatDuration(run.startedAt, run.finishedAt)}
+                  </span>
+
+                  {/* Timestamp */}
+                  <span className="text-[11px] text-on-surface-variant font-label shrink-0">
+                    {formatDate(run.startedAt)}
+                  </span>
+                </div>
+
+                {/* Error message */}
+                {run.status === 'failed' && run.errorMessage && (
+                  <p className="mt-2 text-xs text-error/80 font-mono bg-error/5 rounded-lg px-3 py-2 border border-error/10 break-all">
+                    {run.errorMessage}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {SnackbarNode}
     </div>
   )
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'apikeys' | 'users'
+type Tab = 'apikeys' | 'users' | 'retention'
+
+const NAV_ITEMS: { key: Tab; label: string; description: string; icon: string }[] = [
+  { key: 'apikeys',   label: 'API Keys',      description: 'CI/CD integration tokens',    icon: 'key' },
+  { key: 'users',     label: 'Users',         description: 'OAuth users & role management', icon: 'group' },
+  { key: 'retention', label: 'Data Retention', description: 'Automatic cleanup policy',    icon: 'auto_delete' },
+]
+
+const SECTION_META: Record<Tab, { title: string; description: string }> = {
+  apikeys:   { title: 'API Keys',       description: 'Create and manage keys used by CI/CD pipelines and external integrations.' },
+  users:     { title: 'Users',          description: 'All users who have logged in via OAuth. Admins can override their roles.' },
+  retention: { title: 'Data Retention', description: 'Configure how long reports are kept and how often expired data is cleaned up.' },
+}
 
 export default function SettingsPage() {
   const [params, setParams] = useSearchParams()
-  const activeTab: Tab = params.get('tab') === 'users' ? 'users' : 'apikeys'
+  const raw = params.get('tab')
+  const activeTab: Tab = raw === 'users' ? 'users' : raw === 'retention' ? 'retention' : 'apikeys'
   const setActiveTab = (tab: Tab) => setParams({ tab })
-
-  const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: 'apikeys', label: 'API Keys', icon: 'key' },
-    { key: 'users',   label: 'Users',    icon: 'group' },
-  ]
+  const { title, description } = SECTION_META[activeTab]
 
   return (
-    <div className="flex flex-col h-full -mx-8 -my-6">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background px-8 pt-6 pb-4 border-b border-outline-variant/15">
-        <div className="mb-5">
-          <h2 className="text-4xl font-bold font-headline tracking-tight text-on-surface">Settings</h2>
-          <p className="text-on-surface-variant font-body mt-2">
-            Manage API keys and user roles for everyone who has accessed this system.
-          </p>
+    <div className="flex h-full -mx-8 -my-6">
+      {/* ── Left sidebar nav ── */}
+      <aside className="w-56 shrink-0 border-r border-outline-variant/15 flex flex-col px-3 py-6">
+        <div className="px-2 mb-5">
+          <h2 className="text-xl font-bold font-headline tracking-tight text-on-surface">Settings</h2>
         </div>
-
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-lg w-fit">
-          {TABS.map(({ key, label, icon }) => (
+        <nav className="flex flex-col gap-0.5">
+          {NAV_ITEMS.map(({ key, label, icon, description: desc }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-2 px-4 py-1.5 text-xs font-label font-bold rounded-md transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors group ${
                 activeTab === key
-                  ? 'bg-surface-container-highest text-on-surface shadow-sm'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <span className="material-symbols-outlined text-[14px]">{icon}</span>
-              {label}
+              <span className={`material-symbols-outlined text-[18px] shrink-0 ${activeTab === key ? 'text-primary' : 'text-on-surface-variant group-hover:text-on-surface'}`}>{icon}</span>
+              <div className="min-w-0">
+                <p className={`text-sm font-label font-bold leading-tight ${activeTab === key ? 'text-primary' : ''}`}>{label}</p>
+                <p className="text-[10px] text-on-surface-variant/70 leading-tight mt-0.5 truncate">{desc}</p>
+              </div>
+              {activeTab === key && (
+                <span className="ml-auto w-1 h-5 rounded-full bg-primary shrink-0" />
+              )}
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
+      </aside>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        {activeTab === 'apikeys' ? <APIKeysTab /> : <UsersTab />}
+        <div className="mb-6">
+          <h3 className="text-2xl font-bold font-headline tracking-tight text-on-surface">{title}</h3>
+          <p className="text-sm text-on-surface-variant mt-1">{description}</p>
+        </div>
+
+        {activeTab === 'apikeys'   && <APIKeysSection />}
+        {activeTab === 'users'     && <UsersSection />}
+        {activeTab === 'retention' && <DataRetentionSection />}
       </div>
     </div>
   )

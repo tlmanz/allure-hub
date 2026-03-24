@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/tlmanz/allure-hub/internal/domain"
 	"github.com/tlmanz/allure-hub/internal/usecase"
@@ -171,8 +172,9 @@ func (r *memBuildRepo) LatestByProject(_ context.Context, _, _ string) (*domain.
 func (r *memBuildRepo) StatsForProject(_ context.Context, _, _ string) (*domain.BuildStats, error) {
 	return &domain.BuildStats{}, nil
 }
-func (r *memBuildRepo) Delete(_ context.Context, _, _, _ string) error       { return nil }
-func (r *memBuildRepo) DeleteByProject(_ context.Context, _, _ string) error { return nil }
+func (r *memBuildRepo) Delete(_ context.Context, _, _, _ string) error                               { return nil }
+func (r *memBuildRepo) DeleteByProject(_ context.Context, _, _ string) error                        { return nil }
+func (r *memBuildRepo) ListExpiredBuilds(_ context.Context, _ time.Time) ([]*domain.Build, error) { return nil, nil }
 
 // ─── Upload Session Repo ──────────────────────────────────────────────────────
 

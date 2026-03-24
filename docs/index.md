@@ -15,6 +15,7 @@ Self-hosted Allure 3 reporting platform. A Go API serves the React frontend and 
 - :material-account-check: **Upload attribution** — every build and upload session records who triggered it (OAuth email or `apikey:<name>`)
 - :material-docker: **Single container** — Go binary + Allure CLI + React SPA in one image
 - :material-database: **SQLite or PostgreSQL** — SQLite for single-node; Postgres for HA
+- :material-delete-clock: **Automatic data retention** — background cleanup worker deletes expired reports on a configurable schedule; run history visible in the Settings UI
 
 ---
 

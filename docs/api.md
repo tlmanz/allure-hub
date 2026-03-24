@@ -295,8 +295,108 @@ DELETE /api/settings/apikeys/{id}?action=delete
 | Method | Path | Permission | Description |
 |---|---|---|---|
 | `GET` | `/api/settings/users` | `manage` | List all OAuth users who have signed in |
+| `PATCH` | `/api/settings/users/{email}/role` | `manage` (admin only) | Override a user's role |
+| `DELETE` | `/api/settings/users/{email}/role` | `manage` (admin only) | Reset a user's role to the YAML baseline |
 
 Returns users ordered by most recent login. Each entry includes `email`, `name`, `avatarUrl`, `provider`, `role`, `firstLoginAt`, and `lastLoginAt`.
+
+Role changes take effect on the user's **next login**.
+
+### Data Retention
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/settings/retention` | `manage` | Get current retention settings |
+| `PUT` | `/api/settings/retention` | `manage` | Update retention settings |
+| `GET` | `/api/settings/retention/runs` | `manage` | List recent cleanup sweep runs |
+
+#### Get retention settings
+
+```
+GET /api/settings/retention
+```
+
+**Response (200):**
+
+```json
+{
+  "retentionDays": 90,
+  "intervalHours": 6,
+  "dryRun": false
+}
+```
+
+#### Update retention settings
+
+```
+PUT /api/settings/retention
+```
+
+**Body (JSON):**
+
+```json
+{
+  "retentionDays": 90,
+  "intervalHours": 6,
+  "dryRun": false
+}
+```
+
+| Field | Description |
+|---|---|
+| `retentionDays` | Reports older than this many days are permanently deleted. Minimum: `1`. |
+| `intervalHours` | How often the cleanup worker runs, in hours. Minimum: `1`. |
+| `dryRun` | If `true`, the worker logs what it would delete but takes no action. |
+
+**Response:** `204 No Content`
+
+#### List cleanup runs
+
+```
+GET /api/settings/retention/runs?limit=5
+```
+
+Returns the most recent cleanup sweep records, ordered newest first. At most **5 records** are retained in the database; older runs are automatically pruned after each sweep.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `limit` | `5` | Number of records to return (max `50`) |
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": "01HXY...",
+    "startedAt": "2024-01-15T02:00:00Z",
+    "finishedAt": "2024-01-15T02:00:03Z",
+    "status": "success",
+    "deletedCount": 12,
+    "skippedCount": 0,
+    "dryRun": false
+  },
+  {
+    "id": "01HXX...",
+    "startedAt": "2024-01-14T20:00:00Z",
+    "finishedAt": "2024-01-14T20:00:00Z",
+    "status": "failed",
+    "deletedCount": 0,
+    "skippedCount": 0,
+    "dryRun": false,
+    "errorMessage": "cleanup: list expired builds: context deadline exceeded"
+  }
+]
+```
+
+| Field | Description |
+|---|---|
+| `status` | `success` or `failed` |
+| `deletedCount` | Number of builds removed (or would-be removed in dry-run mode) |
+| `skippedCount` | Builds that encountered a per-record error and were skipped |
+| `dryRun` | Whether this run was a dry-run (no data was actually deleted) |
+| `errorMessage` | Present only on `failed` runs — the top-level error that aborted the sweep |
 
 ## Auth endpoints
 

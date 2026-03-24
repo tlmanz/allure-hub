@@ -108,6 +108,24 @@ flowchart LR
 
     For PostgreSQL deployments this table is created in the same database as the rest of the schema.
 
+## Cleanup Worker
+
+The cleanup worker runs as a background goroutine and periodically deletes reports older than the configured retention period.
+
+| Variable | Default | Description |
+|---|---|---|
+| `CLEANUP_RETENTION_DAYS` | `90` | Seed value for retention period in days. Reports older than this are permanently deleted. |
+| `CLEANUP_INTERVAL` | `6h` | How often the cleanup worker runs. Set to `0` to disable the worker entirely. |
+| `CLEANUP_DRY_RUN` | `false` | Seed value for dry-run mode. If `true`, the worker logs what it would delete but takes no action. |
+
+!!! info "Runtime overrides"
+    These are **startup seed values** — they are written to the `system_settings` database table on first run and can be changed at any time via **Settings → Data Retention** in the UI (or the `PUT /api/settings/retention` endpoint) without restarting the server. Database values always take precedence over environment variables after the first boot.
+
+!!! tip "Disabling the worker"
+    Set `CLEANUP_INTERVAL=0` to disable the cleanup worker entirely. Data retention settings in the UI will still be saved but no automatic deletion will occur.
+
+The outcome of each sweep is recorded. The last **5 runs** are visible in **Settings → Data Retention → Recent Cleanup Runs**, including status (`success`/`failed`), number of builds deleted, skipped count, duration, and the error message if the sweep failed.
+
 ## Rate limiting
 
 | Variable | Default | Description |

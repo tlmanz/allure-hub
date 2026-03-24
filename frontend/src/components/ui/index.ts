@@ -13,3 +13,6 @@ export { default as SearchInput } from './SearchInput'
 
 export { default as Toast, ToastStack } from './Toast'
 export type { ToastData } from './Toast'
+
+export { default as Snackbar, useSnackbar } from './Snackbar'
+export type { SnackbarVariant } from './Snackbar'

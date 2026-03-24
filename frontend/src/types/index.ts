@@ -107,3 +107,20 @@ export interface PagedUsers {
   limit: number
   offset: number
 }
+
+export interface RetentionSettings {
+  retentionDays: number
+  intervalHours: number
+  dryRun: boolean
+}
+
+export interface CleanupRun {
+  id: string
+  startedAt: string
+  finishedAt: string
+  status: 'success' | 'failed'
+  deletedCount: number
+  skippedCount: number
+  dryRun: boolean
+  errorMessage?: string
+}

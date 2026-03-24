@@ -14,22 +14,24 @@ import (
 
 const settingsPageSize = 20
 
-// SettingsHandler exposes API key management and user-tracking endpoints.
+// SettingsHandler exposes API key management, user-tracking, and retention endpoints.
 // All routes require a valid OAuth session (no API key auth allowed here).
 type SettingsHandler struct {
-	apiKeySvc *usecase.APIKeyService
-	userRepo  domain.TrackedUserRepository
-	provider  *kit.LayeredPolicyProvider
-	log       *zap.Logger
+	apiKeySvc  *usecase.APIKeyService
+	userRepo   domain.TrackedUserRepository
+	provider   *kit.LayeredPolicyProvider
+	cleanupSvc *usecase.CleanupService
+	log        *zap.Logger
 }
 
 func NewSettingsHandler(
 	apiKeySvc *usecase.APIKeyService,
 	userRepo domain.TrackedUserRepository,
 	provider *kit.LayeredPolicyProvider,
+	cleanupSvc *usecase.CleanupService,
 	log *zap.Logger,
 ) *SettingsHandler {
-	return &SettingsHandler{apiKeySvc: apiKeySvc, userRepo: userRepo, provider: provider, log: log}
+	return &SettingsHandler{apiKeySvc: apiKeySvc, userRepo: userRepo, provider: provider, cleanupSvc: cleanupSvc, log: log}
 }
 
 // ListAPIKeys returns a page of API keys matching an optional search query.
@@ -187,6 +189,59 @@ func (h *SettingsHandler) SetUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetRetention returns the current data retention settings.
+//
+//	GET /api/settings/retention
+func (h *SettingsHandler) GetRetention(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.cleanupSvc.GetSettings(r.Context())
+	if err != nil {
+		h.log.Error("get retention settings failed", zap.Error(err))
+		http.Error(w, "failed to get retention settings", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, cfg)
+}
+
+// SetRetention updates the data retention settings.
+//
+//	PUT /api/settings/retention
+func (h *SettingsHandler) SetRetention(w http.ResponseWriter, r *http.Request) {
+	var req usecase.RetentionSettings
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBytes)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if err := h.cleanupSvc.SetSettings(r.Context(), req); err != nil {
+		h.log.Error("set retention settings failed", zap.Error(err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetCleanupRuns returns the last N cleanup sweep run records.
+//
+//	GET /api/settings/retention/runs?limit=5
+func (h *SettingsHandler) GetCleanupRuns(w http.ResponseWriter, r *http.Request) {
+	limit := 5
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 50 {
+			limit = n
+		}
+	}
+	runs, err := h.cleanupSvc.GetRecentRuns(r.Context(), limit)
+	if err != nil {
+		h.log.Error("get cleanup runs failed", zap.Error(err))
+		http.Error(w, "failed to get cleanup runs", http.StatusInternalServerError)
+		return
+	}
+	if runs == nil {
+		runs = []*domain.CleanupRun{}
+	}
+	writeJSON(w, runs)
 }
 
 // ResetUserRole removes a user's role override, reverting them to the YAML baseline.
