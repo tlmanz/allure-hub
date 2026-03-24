@@ -9,6 +9,8 @@
 
 Self-hosted Allure 3 reporting platform — upload test results via API or UI, generate and browse reports across environments and projects, with Google OAuth and role-based access control.
 
+![Allure Hub UI](docs/image.png)
+
 ## Quick start
 
 ```bash
