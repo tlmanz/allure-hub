@@ -21,9 +21,17 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 	if err != nil {
 		return fmt.Errorf("repository: marshal config snapshot: %w", err)
 	}
+	warnings := b.GenerationWarnings
+	if warnings == nil {
+		warnings = []string{}
+	}
+	warningsJSON, err := json.Marshal(warnings)
+	if err != nil {
+		return fmt.Errorf("repository: marshal generation warnings: %w", err)
+	}
 	_, err = r.db.ExecContext(ctx,
-		r.db.Ph(`INSERT INTO builds (id, env_id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, uploaded_by, config_snapshot)
-		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		r.db.Ph(`INSERT INTO builds (id, env_id, project_id, build_id, created_at, report_url, total, passed, failed, skipped, status, uploaded_by, config_snapshot, generation_warnings)
+		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		          ON CONFLICT(env_id, project_id, build_id) DO UPDATE SET
 		              report_url      = excluded.report_url,
 		              passed          = excluded.passed,
@@ -32,11 +40,12 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 		              total           = excluded.total,
 		              status          = excluded.status,
 		              uploaded_by     = excluded.uploaded_by,
-		              config_snapshot = excluded.config_snapshot`),
+		              config_snapshot = excluded.config_snapshot,
+		              generation_warnings = excluded.generation_warnings`),
 		b.ID, b.EnvID, b.ProjectID, b.BuildID,
 		b.CreatedAt.UTC().Format(time.RFC3339),
 		b.ReportURL, b.Total, b.Passed, b.Failed, b.Skipped, b.Status, b.UploadedBy,
-		string(configJSON),
+		string(configJSON), string(warningsJSON),
 	)
 	if err != nil {
 		return fmt.Errorf("repository: save build: %w", err)
@@ -46,12 +55,12 @@ func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 
 func (r *BuildRepo) GetByBuildID(ctx context.Context, envID, projectID, buildID string) (*domain.Build, error) {
 	var b domain.Build
-	var createdAt, configJSON string
+	var createdAt, configJSON, warningsJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot, generation_warnings
 		         FROM builds WHERE env_id = ? AND project_id = ? AND build_id = ? LIMIT 1`),
 		envID, projectID, buildID,
-	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
+	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -63,6 +72,9 @@ func (r *BuildRepo) GetByBuildID(ctx context.Context, envID, projectID, buildID 
 	}
 	if err := json.Unmarshal([]byte(configJSON), &b.ConfigSnapshot); err != nil {
 		b.ConfigSnapshot = map[string]any{}
+	}
+	if err := json.Unmarshal([]byte(warningsJSON), &b.GenerationWarnings); err != nil {
+		b.GenerationWarnings = []string{}
 	}
 	return &b, nil
 }
@@ -109,7 +121,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 	// args has envID + projectIDs; append envID again for the join condition.
 	latestRows, err := r.db.QueryContext(ctx,
 		r.db.Ph(`SELECT b.id, b.env_id, b.project_id, b.build_id, b.created_at, b.report_url,
-		                b.passed, b.failed, b.skipped, b.total, b.status, b.uploaded_by, b.config_snapshot
+		                b.passed, b.failed, b.skipped, b.total, b.status, b.uploaded_by, b.config_snapshot, b.generation_warnings
 		         FROM builds b
 		         INNER JOIN (
 		             SELECT project_id, MAX(created_at) AS max_at
@@ -124,9 +136,9 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 	defer latestRows.Close()
 	for latestRows.Next() {
 		var b domain.Build
-		var createdAt, configJSON string
+		var createdAt, configJSON, warningsJSON string
 		if err := latestRows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt,
-			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
+			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON); err != nil {
 			return nil, err
 		}
 		if t, err := parseTimestamp(createdAt); err == nil {
@@ -134,6 +146,9 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 		}
 		if err := json.Unmarshal([]byte(configJSON), &b.ConfigSnapshot); err != nil {
 			b.ConfigSnapshot = map[string]any{}
+		}
+		if err := json.Unmarshal([]byte(warningsJSON), &b.GenerationWarnings); err != nil {
+			b.GenerationWarnings = []string{}
 		}
 		if s, ok := result[b.ProjectID]; ok {
 			bCopy := b
@@ -157,12 +172,12 @@ func (r *BuildRepo) CountByProject(ctx context.Context, envID, projectID string)
 
 func (r *BuildRepo) LatestByProject(ctx context.Context, envID, projectID string) (*domain.Build, error) {
 	var b domain.Build
-	var createdAt, configJSON string
+	var createdAt, configJSON, warningsJSON string
 	err := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot, generation_warnings
 		         FROM builds WHERE env_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 1`),
 		envID, projectID,
-	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON)
+	).Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -175,12 +190,15 @@ func (r *BuildRepo) LatestByProject(ctx context.Context, envID, projectID string
 	if err := json.Unmarshal([]byte(configJSON), &b.ConfigSnapshot); err != nil {
 		b.ConfigSnapshot = map[string]any{}
 	}
+	if err := json.Unmarshal([]byte(warningsJSON), &b.GenerationWarnings); err != nil {
+		b.GenerationWarnings = []string{}
+	}
 	return &b, nil
 }
 
 func (r *BuildRepo) ListByProject(ctx context.Context, envID, projectID string) ([]*domain.Build, error) {
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot, generation_warnings
 		          FROM builds WHERE env_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 1000`),
 		envID, projectID,
 	)
@@ -192,8 +210,8 @@ func (r *BuildRepo) ListByProject(ctx context.Context, envID, projectID string) 
 	var builds []*domain.Build
 	for rows.Next() {
 		var b domain.Build
-		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
+		var createdAt, configJSON, warningsJSON string
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -201,6 +219,9 @@ func (r *BuildRepo) ListByProject(ctx context.Context, envID, projectID string) 
 		}
 		if err := json.Unmarshal([]byte(configJSON), &b.ConfigSnapshot); err != nil {
 			b.ConfigSnapshot = map[string]any{}
+		}
+		if err := json.Unmarshal([]byte(warningsJSON), &b.GenerationWarnings); err != nil {
+			b.GenerationWarnings = []string{}
 		}
 		builds = append(builds, &b)
 	}
@@ -211,7 +232,7 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, envID, projectID, fi
 	where, args := buildFilterWhere(envID, projectID, filter)
 	args = append(args, limit, offset)
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot
+		r.db.Ph(`SELECT id, env_id, project_id, build_id, created_at, report_url, passed, failed, skipped, total, status, uploaded_by, config_snapshot, generation_warnings
 		          FROM builds WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`),
 		args...,
 	)
@@ -223,8 +244,8 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, envID, projectID, fi
 	var builds []*domain.Build
 	for rows.Next() {
 		var b domain.Build
-		var createdAt, configJSON string
-		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON); err != nil {
+		var createdAt, configJSON, warningsJSON string
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt, &b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON); err != nil {
 			return nil, err
 		}
 		if b.CreatedAt, err = parseBuildTime(createdAt); err != nil {
@@ -232,6 +253,9 @@ func (r *BuildRepo) ListByProjectPaged(ctx context.Context, envID, projectID, fi
 		}
 		if err := json.Unmarshal([]byte(configJSON), &b.ConfigSnapshot); err != nil {
 			b.ConfigSnapshot = map[string]any{}
+		}
+		if err := json.Unmarshal([]byte(warningsJSON), &b.GenerationWarnings); err != nil {
+			b.GenerationWarnings = []string{}
 		}
 		builds = append(builds, &b)
 	}

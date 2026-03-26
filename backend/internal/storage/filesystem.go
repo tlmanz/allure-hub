@@ -32,10 +32,10 @@ var ErrTooManyZipEntries = errors.New("zip contains too many entries")
 //       reports/{buildID}/
 
 type Filesystem struct {
-	dataDir          string
-	maxBytes         int64 // max compressed upload size; 0 = no limit
-	maxDecompressed  int64 // max total decompressed bytes across all zip entries; 0 = no limit
-	maxZipEntries    int   // max number of entries in a zip; 0 = no limit
+	dataDir         string
+	maxBytes        int64 // max compressed upload size; 0 = no limit
+	maxDecompressed int64 // max total decompressed bytes across all zip entries; 0 = no limit
+	maxZipEntries   int   // max number of entries in a zip; 0 = no limit
 }
 
 func NewFilesystem(dataDir string, maxBytes, maxDecompressed int64, maxZipEntries int) *Filesystem {

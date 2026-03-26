@@ -9,8 +9,8 @@ const (
 	PhaseUploading  UploadPhase = "uploading"  // chunks are being received
 	PhaseAssembling UploadPhase = "assembling" // server is stitching chunks
 	PhaseGenerating UploadPhase = "generating" // allure generate is running
-	PhaseDone       UploadPhase = "done"        // report is ready
-	PhaseFailed     UploadPhase = "failed"      // an error occurred
+	PhaseDone       UploadPhase = "done"       // report is ready
+	PhaseFailed     UploadPhase = "failed"     // an error occurred
 )
 
 // UploadSession tracks a single upload from start to finish regardless of

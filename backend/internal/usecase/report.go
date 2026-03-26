@@ -71,7 +71,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	}
 
 	log.Debug("generate: invoking allure CLI", zap.String("resultsDir", resultsDir), zap.String("reportDir", reportDir))
-	configSnapshot, err := s.gen.Generate(resultsDir, reportDir, historyFile, opts)
+	genResult, err := s.gen.Generate(resultsDir, reportDir, historyFile, opts)
 	if err != nil {
 		s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, err.Error())
 		return "", err
@@ -101,19 +101,20 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	}
 
 	build := &domain.Build{
-		ID:             uuid.New().String(),
-		EnvID:          envID,
-		ProjectID:      projectID,
-		BuildID:        buildID,
-		CreatedAt:      time.Now().UTC(),
-		ReportURL:      reportURL,
-		Passed:         passed,
-		Failed:         failed,
-		Skipped:        skipped,
-		Total:          total,
-		Status:         status,
-		UploadedBy:     uploadedBy,
-		ConfigSnapshot: configSnapshot,
+		ID:                 uuid.New().String(),
+		EnvID:              envID,
+		ProjectID:          projectID,
+		BuildID:            buildID,
+		CreatedAt:          time.Now().UTC(),
+		ReportURL:          reportURL,
+		Passed:             passed,
+		Failed:             failed,
+		Skipped:            skipped,
+		Total:              total,
+		Status:             status,
+		UploadedBy:         uploadedBy,
+		ConfigSnapshot:     genResult.ConfigSnapshot,
+		GenerationWarnings: genResult.Warnings,
 	}
 	if err := s.buildRepo.Save(ctx, build); err != nil {
 		// Non-fatal: report generated; warn and continue.

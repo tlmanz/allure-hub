@@ -29,6 +29,7 @@ export interface Report {
   total: number
   status: string
   configSnapshot: Record<string, unknown>
+  generationWarnings?: string[]
   uploadedBy?: string
 }
 

@@ -20,7 +20,7 @@ import (
 type Generator struct {
 	bin        string
 	baseConfig map[string]any // parsed allurerc.yml, cached at construction; never mutated
-	sem        chan struct{}   // bounds concurrent allure subprocess invocations
+	sem        chan struct{}  // bounds concurrent allure subprocess invocations
 	timeout    time.Duration  // per-invocation deadline; 0 means no timeout
 	log        *zap.Logger
 }
@@ -47,37 +47,37 @@ func NewGenerator(bin, configPath string, maxConcurrency int, timeout time.Durat
 // file (if any) with opts, so each report can have its own name / quality gates.
 // History must already be injected into resultsDir/history/ before calling.
 // Returns the user-visible config snapshot (effective config without server-internal keys).
-func (g *Generator) Generate(resultsDir, outputDir, historyPath string, opts usecase.GenerateOptions) (map[string]any, error) {
+func (g *Generator) Generate(resultsDir, outputDir, historyPath string, opts usecase.GenerateOptions) (usecase.GenerateResult, error) {
 	// Validate paths inside Generate itself so this method is safe regardless
 	// of which call path reaches it (C-03: defence-in-depth).
 	if err := validateGeneratorPath(resultsDir); err != nil {
-		return nil, fmt.Errorf("invalid resultsDir: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("invalid resultsDir: %w", err)
 	}
 	if err := validateGeneratorPath(outputDir); err != nil {
-		return nil, fmt.Errorf("invalid outputDir: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("invalid outputDir: %w", err)
 	}
 
 	// Allure 3 does not have --clean; remove the output dir manually.
 	if err := os.RemoveAll(outputDir); err != nil {
-		return nil, fmt.Errorf("clear output dir: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("clear output dir: %w", err)
 	}
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return nil, fmt.Errorf("create output dir: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("create output dir: %w", err)
 	}
 
 	// Write a per-run config file that merges the cached base with request opts.
 	cfgData, snapshot, err := buildConfig(g.baseConfig, outputDir, historyPath, opts)
 	if err != nil {
-		return nil, fmt.Errorf("build allure config: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("build allure config: %w", err)
 	}
 	tmpCfg, err := os.CreateTemp("", "allurerc-*.yml")
 	if err != nil {
-		return nil, fmt.Errorf("create temp config: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("create temp config: %w", err)
 	}
 	defer os.Remove(tmpCfg.Name())
 	if _, err := tmpCfg.Write(cfgData); err != nil {
 		tmpCfg.Close()
-		return nil, fmt.Errorf("write temp config: %w", err)
+		return usecase.GenerateResult{}, fmt.Errorf("write temp config: %w", err)
 	}
 	tmpCfg.Close()
 
@@ -113,11 +113,18 @@ func (g *Generator) Generate(resultsDir, outputDir, historyPath string, opts use
 	for _, line := range splitLines(stderr.String()) {
 		g.log.Warn("allure stderr", zap.String("output", line))
 	}
+	warnings := collectKnownAllureParseWarnings(stderr.String())
 
 	if err != nil {
-		return nil, fmt.Errorf("allure generate: %w", err)
+		if shouldIgnoreAllureParseErrors(stderr.String()) {
+			g.log.Warn("allure generate returned non-zero exit due to known parse errors; continuing",
+				zap.Error(err),
+			)
+			return usecase.GenerateResult{ConfigSnapshot: snapshot, Warnings: warnings}, nil
+		}
+		return usecase.GenerateResult{}, fmt.Errorf("allure generate: %w", err)
 	}
-	return snapshot, nil
+	return usecase.GenerateResult{ConfigSnapshot: snapshot, Warnings: warnings}, nil
 }
 
 // HistoryDir returns the history subdirectory of a generated report,
@@ -153,4 +160,41 @@ func splitLines(s string) []string {
 		}
 	}
 	return lines
+}
+
+// shouldIgnoreAllureParseErrors returns true when stderr contains only known
+// non-fatal parse errors from Allure 3's testrun/history inputs that we treat
+// as warnings.
+func shouldIgnoreAllureParseErrors(stderr string) bool {
+	lines := collectKnownAllureParseWarnings(stderr)
+	if len(lines) == 0 {
+		return false
+	}
+	// Ignore only when all non-empty stderr lines are known warnings.
+	return len(lines) == len(splitLines(stderr))
+}
+
+func isKnownAllureParseWarning(line string) bool {
+	l := strings.ToLower(strings.TrimSpace(line))
+	if !strings.Contains(l, "error parsing ") {
+		return false
+	}
+	if !strings.Contains(l, "typeerror: parsed is not iterable") {
+		return false
+	}
+	return strings.Contains(l, "testrun.json") || strings.Contains(l, "history.json")
+}
+
+func collectKnownAllureParseWarnings(stderr string) []string {
+	lines := splitLines(stderr)
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if isKnownAllureParseWarning(line) {
+			out = append(out, line)
+		}
+	}
+	return out
 }

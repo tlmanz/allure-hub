@@ -9,22 +9,24 @@ var ErrBuildNotFound = errors.New("build not found")
 
 // Build represents a generated Allure report for a specific test run.
 type Build struct {
-	ID             string         `json:"id"`
-	EnvID          string         `json:"envId"`
-	ProjectID      string         `json:"projectId"`
-	BuildID        string         `json:"buildId"`
-	CreatedAt      time.Time      `json:"createdAt"`
-	ReportURL      string         `json:"reportUrl"`
-	Passed         int            `json:"passed"`
-	Failed         int            `json:"failed"`
-	Skipped        int            `json:"skipped"`
-	Total          int            `json:"total"`
-	Status         string         `json:"status"`
+	ID        string    `json:"id"`
+	EnvID     string    `json:"envId"`
+	ProjectID string    `json:"projectId"`
+	BuildID   string    `json:"buildId"`
+	CreatedAt time.Time `json:"createdAt"`
+	ReportURL string    `json:"reportUrl"`
+	Passed    int       `json:"passed"`
+	Failed    int       `json:"failed"`
+	Skipped   int       `json:"skipped"`
+	Total     int       `json:"total"`
+	Status    string    `json:"status"`
 	// UploadedBy is the email (OAuth) or "apikey:<name>" of whoever uploaded these results.
-	UploadedBy     string         `json:"uploadedBy"`
+	UploadedBy string `json:"uploadedBy"`
 	// ConfigSnapshot is the effective allurerc.yml config used for generation,
 	// with server-controlled keys (output, historyPath) excluded.
 	ConfigSnapshot map[string]any `json:"configSnapshot"`
+	// GenerationWarnings contains non-fatal warnings encountered during report generation.
+	GenerationWarnings []string `json:"generationWarnings"`
 }
 
 // BuildStats holds aggregate metrics for a project across all builds.

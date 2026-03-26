@@ -5,7 +5,8 @@
 //
 // Key format:  ah_<64 hex chars>   (ah_ prefix aids secret scanning)
 // Header:      Authorization: Bearer ah_<key>
-//              X-API-Key: ah_<key>   (alternative)
+//
+//	X-API-Key: ah_<key>   (alternative)
 //
 // Store implements authkit.APIKeyValidator so it can be passed directly to
 // authkit.Config.APIKeyValidator. Authkit then handles header extraction and
@@ -21,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	kit "github.com/tlmanz/authkit"
 	"github.com/tlmanz/allure-hub/internal/domain"
+	kit "github.com/tlmanz/authkit"
 )
 
 // Generate creates a new API key string and its SHA-256 hash.

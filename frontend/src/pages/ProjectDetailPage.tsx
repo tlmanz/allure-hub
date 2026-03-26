@@ -69,6 +69,7 @@ export default function ProjectDetailPage() {
   const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [expandedConfigs, setExpandedConfigs] = useState<Set<string>>(new Set());
+  const [expandedWarnings, setExpandedWarnings] = useState<Set<string>>(new Set());
 
   function toggleConfig(buildId: string) {
     setExpandedConfigs(prev => {
@@ -82,13 +83,89 @@ export default function ProjectDetailPage() {
     });
   }
 
-  function renderConfigSnapshot(snapshot: Record<string, unknown>): string {
+  function toggleWarnings(buildId: string) {
+    setExpandedWarnings(prev => {
+      const next = new Set(prev);
+      if (next.has(buildId)) {
+        next.delete(buildId);
+      } else {
+        next.add(buildId);
+      }
+      return next;
+    });
+  }
+
+  function yamlToString(snapshot: Record<string, unknown>): string {
     if (!snapshot || Object.keys(snapshot).length === 0) return "(no config — server defaults used)";
     try {
       return yamlDump(snapshot, { indent: 2, lineWidth: -1 }).trimEnd();
     } catch {
       return JSON.stringify(snapshot, null, 2);
     }
+  }
+
+  function renderConfigSnapshot(snapshot: Record<string, unknown>): React.ReactNode {
+    const yaml = yamlToString(snapshot);
+    const lines = yaml.split("\n");
+
+    return lines.map((line, idx) => {
+      const keyValueMatch = line.match(/^(\s*-?\s*)([^:#\n][^:]*)(\s*:\s*)(.*)$/);
+      const commentOnlyMatch = line.match(/^(\s*)(#.*)$/);
+
+      const lineNode = (() => {
+        if (commentOnlyMatch) {
+          return (
+            <>
+              <span>{commentOnlyMatch[1]}</span>
+              <span className="text-emerald-600 dark:text-emerald-300">{commentOnlyMatch[2]}</span>
+            </>
+          );
+        }
+
+        if (keyValueMatch) {
+          const [, indent, key, sep, rawValue] = keyValueMatch;
+          const value = rawValue.trim();
+          let valueClass = "text-on-surface";
+          if (value === "true" || value === "false" || value === "null") {
+            valueClass = "text-violet-700 dark:text-violet-300";
+          } else if (/^-?\d+(\.\d+)?$/.test(value)) {
+            valueClass = "text-fuchsia-700 dark:text-fuchsia-300";
+          } else if (value.startsWith('"') || value.startsWith("'")) {
+            valueClass = "text-amber-700 dark:text-amber-300";
+          }
+
+          return (
+            <>
+              <span>{indent}</span>
+              <span className="text-sky-700 dark:text-sky-300">{key}</span>
+              <span className="text-on-surface-variant">{sep}</span>
+              <span className={valueClass}>{rawValue}</span>
+            </>
+          );
+        }
+
+        const listMatch = line.match(/^(\s*)(-\s+)(.*)$/);
+        if (listMatch) {
+          const [, indent, dash, value] = listMatch;
+          return (
+            <>
+              <span>{indent}</span>
+              <span className="text-violet-700 dark:text-violet-300">{dash}</span>
+              <span className="text-on-surface">{value}</span>
+            </>
+          );
+        }
+
+        return <span className="text-on-surface">{line}</span>;
+      })();
+
+      return (
+        <React.Fragment key={`cfg-line-${idx}`}>
+          {lineNode}
+          {idx < lines.length - 1 ? "\n" : null}
+        </React.Fragment>
+      );
+    });
   }
 
   const { can } = useAuth()
@@ -484,6 +561,24 @@ export default function ProjectDetailPage() {
                           </span>
                           <span className="text-[11px]">Config</span>
                         </button>
+                        {(r.generationWarnings?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); toggleWarnings(r.buildId); }}
+                            className="flex items-center gap-1 text-amber-600/90 hover:text-amber-500 transition-colors"
+                            aria-expanded={expandedWarnings.has(r.buildId)}
+                            aria-label={expandedWarnings.has(r.buildId) ? "Hide generation warnings" : "Show generation warnings"}
+                          >
+                            <span
+                              className="material-symbols-outlined text-[13px] transition-transform"
+                              style={{ transform: expandedWarnings.has(r.buildId) ? "rotate(90deg)" : "rotate(0deg)" }}
+                              aria-hidden="true"
+                            >
+                              chevron_right
+                            </span>
+                            <span className="text-[11px]">Warnings ({r.generationWarnings?.length ?? 0})</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-10 shrink-0">
@@ -562,6 +657,23 @@ export default function ProjectDetailPage() {
                       <pre className="px-4 py-3 text-xs font-mono text-on-surface leading-relaxed overflow-x-auto whitespace-pre">
                         {renderConfigSnapshot(r.configSnapshot)}
                       </pre>
+                    </div>
+                  )}
+                  {expandedWarnings.has(r.buildId) && (r.generationWarnings?.length ?? 0) > 0 && (
+                    <div className="mx-7 mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 dark:border-amber-300/35 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-500/25 dark:border-amber-300/35 bg-amber-500/15 dark:bg-amber-300/15">
+                        <span className="material-symbols-outlined text-[14px] text-amber-800 dark:text-amber-200">warning</span>
+                        <span className="text-[11px] font-label font-bold uppercase tracking-wider text-amber-900 dark:text-amber-100">
+                          Generation warnings
+                        </span>
+                      </div>
+                      <ul className="px-4 py-3 text-xs font-mono text-amber-950 dark:text-amber-50 leading-relaxed space-y-2">
+                        {(r.generationWarnings ?? []).map((warning, idx) => (
+                          <li key={`${r.buildId}-warning-${idx}`} className="break-words">
+                            {warning}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
