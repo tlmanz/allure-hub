@@ -86,7 +86,6 @@ func (r *EnvironmentRepo) CountProjectsBatch(ctx context.Context, envIDs []strin
 	return result, rows.Err()
 }
 
-
 func (r *EnvironmentRepo) Update(ctx context.Context, id, name, icon string) error {
 	res, err := r.db.ExecContext(ctx,
 		r.db.Ph(`UPDATE environments SET name = ?, icon = ? WHERE id = ?`), name, icon, id,

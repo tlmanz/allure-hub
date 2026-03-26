@@ -42,10 +42,10 @@ func (h *HealthHandler) Check(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 	writeJSON(w, map[string]any{
-		"status":   status,
-		"uptime":   time.Since(startTime).Round(time.Second).String(),
-		"db":       dbStatus,
-		"version":  Version,
+		"status":  status,
+		"uptime":  time.Since(startTime).Round(time.Second).String(),
+		"db":      dbStatus,
+		"version": Version,
 	})
 }
 

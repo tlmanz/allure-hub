@@ -28,12 +28,21 @@ type GenerateOptions struct {
 	Overrides map[string]any
 }
 
+// GenerateResult is the output from one Allure generation run.
+type GenerateResult struct {
+	// ConfigSnapshot is the effective allurerc.yml config (merged base + overrides)
+	// with server-controlled keys removed.
+	ConfigSnapshot map[string]any
+	// Warnings are non-fatal generation warnings surfaced by the generator adapter.
+	Warnings []string
+}
+
 // Generator is the port for the Allure CLI report generator.
 // The infrastructure adapter lives in internal/allure.
 // Generate returns the effective config snapshot (merged base + user overrides,
 // without server-controlled keys) so callers can persist it with the build record.
 type Generator interface {
-	Generate(resultsDir, outputDir, historyPath string, opts GenerateOptions) (map[string]any, error)
+	Generate(resultsDir, outputDir, historyPath string, opts GenerateOptions) (GenerateResult, error)
 	HistoryDir(reportDir string) string
 }
 

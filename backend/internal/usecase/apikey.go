@@ -22,7 +22,7 @@ func NewAPIKeyService(repo domain.APIKeyRepository) *APIKeyService {
 // CreateResult holds the newly created key record and the plaintext key.
 // The plaintext is shown once to the caller; it is never stored.
 type CreateResult struct {
-	Key      *domain.APIKey
+	Key       *domain.APIKey
 	Plaintext string
 }
 
@@ -81,4 +81,3 @@ func (s *APIKeyService) Revoke(ctx context.Context, id string) error {
 func (s *APIKeyService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
-

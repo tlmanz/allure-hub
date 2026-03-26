@@ -11,3 +11,4 @@ backend/policy.yaml
 .k8s
 .venv
 site/
+jenkins

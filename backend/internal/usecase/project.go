@@ -101,7 +101,7 @@ func (s *ProjectService) Delete(ctx context.Context, envID, id string) error {
 	if err := s.repo.Delete(ctx, envID, id); err != nil {
 		return err
 	}
-	_ = s.buildRepo.DeleteByProject(ctx, envID, id)   // best-effort
-	_ = s.sessionRepo.DeleteByProject(ctx, id)        // best-effort
+	_ = s.buildRepo.DeleteByProject(ctx, envID, id) // best-effort
+	_ = s.sessionRepo.DeleteByProject(ctx, id)      // best-effort
 	return s.fs.RemoveProject(envID, id)
 }

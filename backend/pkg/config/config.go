@@ -95,9 +95,9 @@ type AuthConfig struct {
 // can be overridden at runtime via the Settings API without a server restart.
 // Set CLEANUP_INTERVAL to 0 to disable the worker entirely.
 type CleanupConfig struct {
-	RetentionDays   int           `env:"CLEANUP_RETENTION_DAYS"    envDefault:"90"`
-	Interval        time.Duration `env:"CLEANUP_INTERVAL"          envDefault:"6h"`
-	DryRun          bool          `env:"CLEANUP_DRY_RUN"           envDefault:"false"`
+	RetentionDays int           `env:"CLEANUP_RETENTION_DAYS"    envDefault:"90"`
+	Interval      time.Duration `env:"CLEANUP_INTERVAL"          envDefault:"6h"`
+	DryRun        bool          `env:"CLEANUP_DRY_RUN"           envDefault:"false"`
 }
 
 // Config is the root configuration for allure-hub, assembled from environment
