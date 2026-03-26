@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type { UploadSession } from '../types'
 import { formatBytes } from '../utils/format'
 
@@ -30,6 +30,7 @@ const RETRY_LABEL: Partial<Record<string, { label: string; icon: string }>> = {
 }
 
 function UploadSessionCard({ session, onRetry }: Props) {
+  const [warningExpanded, setWarningExpanded] = useState(false)
   const meta = PHASE_META[session.phase as keyof typeof PHASE_META] ?? PHASE_META.uploading
   const isActive = session.phase === 'uploading' || session.phase === 'assembling' || session.phase === 'generating'
   const pct = session.totalChunks > 0
@@ -117,7 +118,8 @@ function UploadSessionCard({ session, onRetry }: Props) {
 
         {/* Done: stats row + open link */}
         {session.phase === 'done' && (
-          <div className="flex items-center justify-between mt-1 gap-2">
+          <div className="mt-1">
+            <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="flex items-center gap-1 text-[11px] font-label text-emerald-500 font-semibold">
                 <span className="material-symbols-outlined text-[13px]">check_circle</span>
@@ -144,6 +146,26 @@ function UploadSessionCard({ session, onRetry }: Props) {
                 Open
                 <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
               </a>
+            )}
+            </div>
+            {session.error && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setWarningExpanded(v => !v)}
+                  className="flex items-center gap-1.5 text-[11px] text-amber-600 font-label font-semibold hover:text-amber-700 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[13px]">warning</span>
+                  Warnings
+                  <span className="material-symbols-outlined text-[13px]">
+                    {warningExpanded ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+                {warningExpanded && (
+                  <pre className="mt-1 text-[11px] text-amber-700 font-mono whitespace-pre-wrap break-all leading-snug">
+                    {session.error}
+                  </pre>
+                )}
+              </div>
             )}
           </div>
         )}

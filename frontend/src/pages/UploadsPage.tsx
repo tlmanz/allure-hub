@@ -66,9 +66,14 @@ function isActive(phase: UploadPhase) {
 function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s: UploadSession) => void; canDelete: boolean }) {
   const ph = getPhase(s.phase)
   const [errorExpanded, setErrorExpanded] = useState(false)
+  const [warningExpanded, setWarningExpanded] = useState(false)
   const toggleError = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setErrorExpanded(v => !v)
+  }, [])
+  const toggleWarning = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setWarningExpanded(v => !v)
   }, [])
 
   const pct = s.totalChunks > 0
@@ -77,6 +82,7 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
 
   const isFailed = s.phase === 'failed'
   const hasError = isFailed && !!s.error
+  const hasDoneWarning = s.phase === 'done' && !!s.error
 
   return (
     <div className={`group border rounded-xl overflow-hidden transition-all duration-200 ${
@@ -114,6 +120,23 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
                 </span>
               </>
             )}
+            {hasDoneWarning && (
+              <>
+                <span className="opacity-50">·</span>
+                <button
+                  onClick={toggleWarning}
+                  className="flex items-center gap-1 text-amber-600/90 hover:text-amber-500
+                             font-label font-semibold transition-colors"
+                  title={warningExpanded ? 'Collapse warnings' : 'Expand warnings'}
+                >
+                  <span className="material-symbols-outlined text-[12px]">warning</span>
+                  <span>Warnings</span>
+                  <span className="material-symbols-outlined text-[12px]">
+                    {warningExpanded ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -138,16 +161,20 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
         )}
 
         {/* Done: report link */}
-        {s.phase === 'done' && s.reportUrl && (
-          <a
-            href={s.reportUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[11px] text-primary font-label font-semibold hover:underline shrink-0"
-          >
-            Open report
-            <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-          </a>
+        {s.phase === 'done' && (
+          <div className="flex items-center gap-2 shrink-0">
+            {s.reportUrl && (
+              <a
+                href={s.reportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[11px] text-primary font-label font-semibold hover:underline"
+              >
+                Open report
+                <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+              </a>
+            )}
+          </div>
         )}
 
         {/* Failed: inline summary + expand toggle */}
@@ -202,6 +229,18 @@ function SessionRow({ s, onDelete, canDelete }: { s: UploadSession; onDelete: (s
             Error details
           </p>
           <pre className="text-xs text-error font-mono whitespace-pre-wrap break-all leading-relaxed">
+            {s.error}
+          </pre>
+        </div>
+      )}
+
+      {/* Non-fatal warnings from generation (done phase). */}
+      {hasDoneWarning && warningExpanded && (
+        <div className="border-t border-amber-500/20 bg-amber-500/5 px-5 py-3">
+          <p className="text-[10px] font-label font-bold uppercase tracking-widest text-amber-600 mb-1.5">
+            Generation warnings
+          </p>
+          <pre className="text-xs text-amber-700 font-mono whitespace-pre-wrap break-all leading-relaxed">
             {s.error}
           </pre>
         </div>

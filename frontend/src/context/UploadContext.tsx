@@ -128,7 +128,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     if (!envId || !projectId || !buildId) return
 
     const runGenerate = () =>
-      api.generateReport(envId, projectId, buildId).catch((err: unknown) => {
+      api.generateReport(envId, projectId, buildId, true).catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Generation failed'
         upsert({ ...session, phase: 'failed', error: message })
       })

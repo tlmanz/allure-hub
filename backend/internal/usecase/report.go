@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -41,7 +42,7 @@ func (s *ReportService) SaveResultsStream(ctx context.Context, envID, projectID,
 
 // Generate stitches history, runs allure generate, persists the Build record,
 // and saves the new history back for the next run.
-func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID string, opts GenerateOptions) (string, error) {
+func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID string, opts GenerateOptions) (reportURL string, retErr error) {
 	log := s.log.With(zap.String("projectId", projectID), zap.String("buildId", buildID))
 	log.Debug("generate: starting")
 
@@ -57,13 +58,24 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 
 	// Transition session to generating.
 	s.transitionSession(ctx, projectID, buildID, domain.PhaseGenerating, "")
+	defer func() {
+		if r := recover(); r != nil {
+			msg := fmt.Sprintf("panic during generate: %v", r)
+			s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, msg)
+			panic(r)
+		}
+		// Safety net: ensure any returned error cannot leave the session in
+		// "generating" due to a missed transition in future code paths.
+		if retErr != nil {
+			s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, retErr.Error())
+		}
+	}()
 
 	// Inject previous history so trend charts work.
 	historyDest := filepath.Join(resultsDir, "history")
 	if _, err := os.Stat(persistentHistory); err == nil {
 		log.Debug("generate: injecting history", zap.String("src", persistentHistory), zap.String("dst", historyDest))
 		if err := copyDir(persistentHistory, historyDest); err != nil {
-			s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, fmt.Sprintf("inject history: %v", err))
 			return "", fmt.Errorf("inject history: %w", err)
 		}
 	} else {
@@ -73,7 +85,6 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	log.Debug("generate: invoking allure CLI", zap.String("resultsDir", resultsDir), zap.String("reportDir", reportDir))
 	genResult, err := s.gen.Generate(resultsDir, reportDir, historyFile, opts)
 	if err != nil {
-		s.transitionSession(ctx, projectID, buildID, domain.PhaseFailed, err.Error())
 		return "", err
 	}
 	log.Debug("generate: allure CLI finished")
@@ -90,7 +101,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 		log.Debug("generate: no new history dir found in report output")
 	}
 
-	reportURL := fmt.Sprintf("/reports/%s/%s/%s/index.html", envID, projectID, buildID)
+	reportURL = fmt.Sprintf("/reports/%s/%s/%s/index.html", envID, projectID, buildID)
 	passed, failed, skipped, total, status := parseSummary(reportDir)
 	log.Debug("generate: summary parsed", zap.Int("passed", passed), zap.Int("failed", failed), zap.Int("total", total), zap.String("status", status))
 
@@ -126,7 +137,7 @@ func (s *ReportService) Generate(ctx context.Context, envID, projectID, buildID 
 	}
 
 	// Mark session done with final stats.
-	s.finishSession(ctx, projectID, buildID, reportURL, passed, failed, skipped, total)
+	s.finishSession(ctx, projectID, buildID, reportURL, passed, failed, skipped, total, genResult.Warnings)
 
 	return reportURL, nil
 }
@@ -190,7 +201,7 @@ func (s *ReportService) transitionSession(ctx context.Context, projectID, buildI
 	}
 }
 
-func (s *ReportService) finishSession(ctx context.Context, projectID, buildID, reportURL string, passed, failed, skipped, total int) {
+func (s *ReportService) finishSession(ctx context.Context, projectID, buildID, reportURL string, passed, failed, skipped, total int, warnings []string) {
 	sess, err := s.sessionRepo.GetByBuild(ctx, projectID, buildID)
 	if err != nil || sess == nil {
 		return
@@ -203,6 +214,11 @@ func (s *ReportService) finishSession(ctx context.Context, projectID, buildID, r
 	sess.Failed = failed
 	sess.Skipped = skipped
 	sess.Total = total
+	if len(warnings) > 0 {
+		sess.Error = strings.Join(warnings, "\n")
+	} else {
+		sess.Error = ""
+	}
 	if err := s.sessionRepo.Update(ctx, sess); err == nil {
 		s.bus.Publish(sess)
 	}

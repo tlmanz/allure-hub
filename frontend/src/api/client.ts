@@ -80,12 +80,15 @@ export const api = {
   deleteReport: (envId: string, projectId: string, buildId: string) =>
     request<void>(`/environments/${enc(envId)}/projects/${enc(projectId)}/reports/${enc(buildId)}`, { method: 'DELETE' }),
 
-  generateReport: (envId: string, projectId: string, buildId: string) =>
-    request<{ reportUrl: string }>(`/environments/${enc(envId)}/projects/${enc(projectId)}/reports`, {
+  generateReport: (envId: string, projectId: string, buildId: string, asyncGenerate = false) =>
+    request<{ reportUrl: string; status?: string }>(
+      `/environments/${enc(envId)}/projects/${enc(projectId)}/reports${asyncGenerate ? '?async=true' : ''}`,
+      {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ buildId }),
-    }),
+      },
+    ),
 
   retryAssembly: (envId: string, projectId: string, uploadId: string) =>
     request<{ status: string }>(
@@ -201,7 +204,7 @@ export const api = {
 
     // 4. Generate report
     await request<{ reportUrl: string }>(
-      `/environments/${enc(envId)}/projects/${enc(projectId)}/reports`,
+      `/environments/${enc(envId)}/projects/${enc(projectId)}/reports?async=true`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

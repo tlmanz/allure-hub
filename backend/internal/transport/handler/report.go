@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -199,6 +201,18 @@ func (h *ReportHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	opts := usecase.GenerateOptions{Overrides: req.ReportConfig}
+
+	if async, _ := strconv.ParseBool(r.URL.Query().Get("async")); async {
+		reportURL := fmt.Sprintf("/reports/%s/%s/%s/index.html", envID, projectID, req.BuildID)
+		go func(envID, projectID, buildID string, opts usecase.GenerateOptions) {
+			if _, err := h.reportSvc.Generate(context.Background(), envID, projectID, buildID, opts); err != nil {
+				h.log.Error("async generate report failed", zap.String("projectId", projectID), zap.String("buildId", buildID), zap.Error(err))
+			}
+		}(envID, projectID, req.BuildID, opts)
+		w.WriteHeader(http.StatusAccepted)
+		writeJSON(w, map[string]string{"status": "accepted", "reportUrl": reportURL})
+		return
+	}
 
 	reportURL, err := h.reportSvc.Generate(r.Context(), envID, projectID, req.BuildID, opts)
 	if err != nil {

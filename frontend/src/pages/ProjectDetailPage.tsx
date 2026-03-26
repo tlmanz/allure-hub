@@ -548,19 +548,18 @@ export default function ProjectDetailPage() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); toggleConfig(r.buildId); }}
-                          className="flex items-center gap-1 text-on-surface-variant/60 hover:text-primary transition-colors"
+                          className="flex items-center gap-1 text-on-surface-variant/70 hover:text-primary transition-colors"
                           aria-expanded={expandedConfigs.has(r.buildId)}
                           aria-label={expandedConfigs.has(r.buildId) ? "Hide report config" : "Show report config"}
                         >
-                          <span
-                            className="material-symbols-outlined text-[13px] transition-transform"
-                            style={{ transform: expandedConfigs.has(r.buildId) ? "rotate(90deg)" : "rotate(0deg)" }}
-                            aria-hidden="true"
-                          >
-                            chevron_right
-                          </span>
+                          <span className="material-symbols-outlined text-[13px]" aria-hidden="true">settings</span>
                           <span className="text-[11px]">Config</span>
                         </button>
+                        {(r.generationWarnings?.length ?? 0) > 0 && (
+                          <span className="material-symbols-outlined text-[12px] text-on-surface-variant/40" aria-hidden="true">
+                            chevron_right
+                          </span>
+                        )}
                         {(r.generationWarnings?.length ?? 0) > 0 && (
                           <button
                             type="button"
@@ -569,13 +568,7 @@ export default function ProjectDetailPage() {
                             aria-expanded={expandedWarnings.has(r.buildId)}
                             aria-label={expandedWarnings.has(r.buildId) ? "Hide generation warnings" : "Show generation warnings"}
                           >
-                            <span
-                              className="material-symbols-outlined text-[13px] transition-transform"
-                              style={{ transform: expandedWarnings.has(r.buildId) ? "rotate(90deg)" : "rotate(0deg)" }}
-                              aria-hidden="true"
-                            >
-                              chevron_right
-                            </span>
+                            <span className="material-symbols-outlined text-[13px]" aria-hidden="true">warning</span>
                             <span className="text-[11px]">Warnings ({r.generationWarnings?.length ?? 0})</span>
                           </button>
                         )}
