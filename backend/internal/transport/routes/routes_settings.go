@@ -9,7 +9,7 @@ import (
 )
 
 // registerSettingsRoutes registers all /api/settings/* routes.
-// All are session-only — API keys must not manage themselves.
+// All are session-only - API keys must not manage themselves.
 func RegisterSettingsRoutes(mux *http.ServeMux, auth *kit.Auth, sh *handler.SettingsHandler) {
 	mux.Handle("GET /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListAPIKeys)))
 	mux.Handle("POST /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.CreateAPIKey)))

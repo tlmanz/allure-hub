@@ -1,6 +1,6 @@
 # Configuration
 
-All settings are loaded from environment variables. In local development, place them in `backend/.env` — the Makefile exports them automatically.
+All settings are loaded from environment variables. In local development, place them in `backend/.env` - the Makefile exports them automatically.
 
 ## Server
 
@@ -63,12 +63,12 @@ Migrations run automatically on startup for both drivers.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SESSION_SECRET` | — **(required)** | 32-byte hex secret for cookie encryption |
-| `BASE_URL` | — | Public base URL (e.g. `https://allure.example.com`) |
+| `SESSION_SECRET` | - **(required)** | 32-byte hex secret for cookie encryption |
+| `BASE_URL` | - | Public base URL (e.g. `https://allure.example.com`) |
 | `SECURE_COOKIE` | `false` | Set `true` in production (HTTPS only) |
-| `GOOGLE_CLIENT_ID` | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret |
-| `AUTH_POLICY_FILE` | `./policy.yaml` | Path to RBAC policy file (used as baseline — see below) |
+| `GOOGLE_CLIENT_ID` | - | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret |
+| `AUTH_POLICY_FILE` | `./policy.yaml` | Path to RBAC policy file (used as baseline - see below) |
 | `AUTH_AFTER_LOGIN_URL` | `/` | Redirect URL after successful login |
 | `AUTH_AFTER_LOGOUT_URL` | `/login` | Redirect URL after logout |
 
@@ -90,7 +90,7 @@ flowchart LR
 !!! tip
     You can bootstrap roles via `policy.yaml` and manage individual user roles at runtime through the UI without editing files or redeploying.
 
-**Changing a user's role** requires the `admin` role. The change takes effect on the user's next login — their current session is invalidated immediately so they are forced to re-authenticate with the new role.
+**Changing a user's role** requires the `admin` role. The change takes effect on the user's next login - their current session is invalidated immediately so they are forced to re-authenticate with the new role.
 
 **Resetting a user to the YAML baseline** is done by removing their override (the "Reset to default" action in the Settings UI).
 
@@ -119,7 +119,7 @@ The cleanup worker runs as a background goroutine and periodically deletes repor
 | `CLEANUP_DRY_RUN` | `false` | Seed value for dry-run mode. If `true`, the worker logs what it would delete but takes no action. |
 
 !!! info "Runtime overrides"
-    These are **startup seed values** — they are written to the `system_settings` database table on first run and can be changed at any time via **Settings → Data Retention** in the UI (or the `PUT /api/settings/retention` endpoint) without restarting the server. Database values always take precedence over environment variables after the first boot.
+    These are **startup seed values** - they are written to the `system_settings` database table on first run and can be changed at any time via **Settings → Data Retention** in the UI (or the `PUT /api/settings/retention` endpoint) without restarting the server. Database values always take precedence over environment variables after the first boot.
 
 !!! tip "Disabling the worker"
     Set `CLEANUP_INTERVAL=0` to disable the cleanup worker entirely. Data retention settings in the UI will still be saved but no automatic deletion will occur.

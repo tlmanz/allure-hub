@@ -34,12 +34,14 @@ export default function UploadResultsModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, isOpen);
 
-  const MAX_FILE_BYTES = 512 * 1024 * 1024 // 512 MB — matches server limit
+  const MAX_FILE_BYTES = 512 * 1024 * 1024; // 512 MB - matches server limit
 
   function acceptFile(f: File | undefined) {
     if (!f) return;
     if (f.size > MAX_FILE_BYTES) {
-      setFileError(`File too large (${(f.size / 1024 / 1024).toFixed(0)} MB). Maximum is 512 MB.`);
+      setFileError(
+        `File too large (${(f.size / 1024 / 1024).toFixed(0)} MB). Maximum is 512 MB.`,
+      );
       setFile(null);
       return;
     }
@@ -51,10 +53,13 @@ export default function UploadResultsModal({
     e.preventDefault();
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped && (dropped.type === 'application/zip' || dropped.name.endsWith('.zip'))) {
+    if (
+      dropped &&
+      (dropped.type === "application/zip" || dropped.name.endsWith(".zip"))
+    ) {
       acceptFile(dropped);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -89,14 +94,18 @@ export default function UploadResultsModal({
     return () => document.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
-  const BUILD_ID_PATTERN = /^[a-zA-Z0-9._-]+$/
+  const BUILD_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
   function validateConfigYaml(value: string): string | null {
     const trimmed = value.trim();
     if (!trimmed) return null;
     try {
       const parsed = parseYaml(trimmed);
-      if (parsed !== null && parsed !== undefined && (typeof parsed !== "object" || Array.isArray(parsed))) {
+      if (
+        parsed !== null &&
+        parsed !== undefined &&
+        (typeof parsed !== "object" || Array.isArray(parsed))
+      ) {
         return "Config must be a YAML mapping (key: value pairs).";
       }
       return null;
@@ -124,7 +133,9 @@ export default function UploadResultsModal({
         return;
       }
       const parsed = parseYaml(trimmedConfig);
-      reportConfig = (parsed ?? undefined) as Record<string, unknown> | undefined;
+      reportConfig = (parsed ?? undefined) as
+        | Record<string, unknown>
+        | undefined;
     }
 
     startUpload(envId, projectId, buildId.trim(), file, reportConfig);
@@ -159,7 +170,10 @@ export default function UploadResultsModal({
               </span>
             </div>
             <div>
-              <h3 id="upload-modal-title" className="text-base font-headline font-bold text-on-surface">
+              <h3
+                id="upload-modal-title"
+                className="text-base font-headline font-bold text-on-surface"
+              >
                 Upload Results
               </h3>
               <p className="text-[11px] text-on-surface-variant font-label">
@@ -172,14 +186,22 @@ export default function UploadResultsModal({
             aria-label="Close modal"
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors text-on-surface-variant"
           >
-            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+            <span
+              className="material-symbols-outlined text-[20px]"
+              aria-hidden="true"
+            >
+              close
+            </span>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Build ID */}
           <div>
-            <label htmlFor="upload-build-id" className="text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant mb-1.5 block">
+            <label
+              htmlFor="upload-build-id"
+              className="text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant mb-1.5 block"
+            >
               Build ID
             </label>
             <input
@@ -201,7 +223,10 @@ export default function UploadResultsModal({
 
           {/* File picker */}
           <div>
-            <label htmlFor="upload-zip-file" className="text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant mb-1.5 block">
+            <label
+              htmlFor="upload-zip-file"
+              className="text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant mb-1.5 block"
+            >
               Results ZIP
             </label>
             <div
@@ -238,13 +263,17 @@ export default function UploadResultsModal({
                     cloud_upload
                   </span>
                   <p className="text-sm font-label text-on-surface-variant">
-                    {dragging ? "Drop to upload" : "Drag & drop or click to select a .zip file"}
+                    {dragging
+                      ? "Drop to upload"
+                      : "Drag & drop or click to select a .zip file"}
                   </p>
                 </>
               )}
             </div>
             {fileError && (
-              <p className="text-[11px] text-error font-medium mt-1.5">{fileError}</p>
+              <p className="text-[11px] text-error font-medium mt-1.5">
+                {fileError}
+              </p>
             )}
           </div>
 
@@ -252,25 +281,32 @@ export default function UploadResultsModal({
           <div>
             <button
               type="button"
-              onClick={() => setConfigOpen(o => !o)}
+              onClick={() => setConfigOpen((o) => !o)}
               className="flex items-center gap-1.5 text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors"
               aria-expanded={configOpen}
             >
               <span
                 className="material-symbols-outlined text-[14px] transition-transform"
-                style={{ transform: configOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                style={{
+                  transform: configOpen ? "rotate(90deg)" : "rotate(0deg)",
+                }}
                 aria-hidden="true"
               >
                 chevron_right
               </span>
               Report Config
-              <span className="normal-case tracking-normal font-normal text-on-surface-variant/60 ml-1">(optional)</span>
+              <span className="normal-case tracking-normal font-normal text-on-surface-variant/60 ml-1">
+                (optional)
+              </span>
             </button>
 
             {configOpen && (
               <div className="mt-2 flex flex-col gap-1.5">
                 <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                  Override <span className="font-mono">allurerc.yml</span> settings for this upload. Enter valid YAML — server-controlled keys (<span className="font-mono">output</span>, <span className="font-mono">historyPath</span>) are ignored.
+                  Override <span className="font-mono">allurerc.yml</span>{" "}
+                  settings for this upload. Enter valid YAML - server-controlled
+                  keys (<span className="font-mono">output</span>,{" "}
+                  <span className="font-mono">historyPath</span>) are ignored.
                 </p>
                 <textarea
                   aria-label="Report config YAML"
@@ -283,10 +319,14 @@ export default function UploadResultsModal({
                       ? "border-error/60 focus:ring-error/40"
                       : "border-outline-variant/30 focus:ring-primary/40"
                   }`}
-                  placeholder={"plugins:\n  awesome:\n    options:\n      reportName: My Report"}
+                  placeholder={
+                    "plugins:\n  awesome:\n    options:\n      reportName: My Report"
+                  }
                 />
                 {configError && (
-                  <p className="text-[11px] text-error font-medium">{configError}</p>
+                  <p className="text-[11px] text-error font-medium">
+                    {configError}
+                  </p>
                 )}
               </div>
             )}
@@ -303,7 +343,13 @@ export default function UploadResultsModal({
             </button>
             <button
               type="submit"
-              disabled={!file || !buildId.trim() || !!fileError || !/^[a-zA-Z0-9._-]+$/.test(buildId.trim()) || !!configError}
+              disabled={
+                !file ||
+                !buildId.trim() ||
+                !!fileError ||
+                !/^[a-zA-Z0-9._-]+$/.test(buildId.trim()) ||
+                !!configError
+              }
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-on-primary text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-[16px]">

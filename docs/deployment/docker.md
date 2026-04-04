@@ -59,7 +59,7 @@ Mount `/data` to preserve reports and the database across container restarts:
 ```
 
 !!! tip
-    The RBAC `policy.yaml` baseline can be stored in the data volume and referenced via `AUTH_POLICY_FILE=/data/policy.yaml`. Role overrides set through the Settings UI are stored in the database automatically — no file changes needed at runtime.
+    The RBAC `policy.yaml` baseline can be stored in the data volume and referenced via `AUTH_POLICY_FILE=/data/policy.yaml`. Role overrides set through the Settings UI are stored in the database automatically - no file changes needed at runtime.
 
 ## Docker Compose
 

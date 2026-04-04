@@ -7,7 +7,7 @@ import { useUpload } from "../context/UploadContext";
 import { useAuth } from "../context/AuthContext";
 import UploadResultsModal from "../components/UploadResultsModal";
 import DeleteConfirmModal from "../components/ui/DeleteConfirmModal";
-import { formatDate } from '../utils/format'
+import { formatDate } from "../utils/format";
 
 const PAGE_SIZE = 10;
 
@@ -68,11 +68,15 @@ export default function ProjectDetailPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [expandedConfigs, setExpandedConfigs] = useState<Set<string>>(new Set());
-  const [expandedWarnings, setExpandedWarnings] = useState<Set<string>>(new Set());
+  const [expandedConfigs, setExpandedConfigs] = useState<Set<string>>(
+    new Set(),
+  );
+  const [expandedWarnings, setExpandedWarnings] = useState<Set<string>>(
+    new Set(),
+  );
 
   function toggleConfig(buildId: string) {
-    setExpandedConfigs(prev => {
+    setExpandedConfigs((prev) => {
       const next = new Set(prev);
       if (next.has(buildId)) {
         next.delete(buildId);
@@ -84,7 +88,7 @@ export default function ProjectDetailPage() {
   }
 
   function toggleWarnings(buildId: string) {
-    setExpandedWarnings(prev => {
+    setExpandedWarnings((prev) => {
       const next = new Set(prev);
       if (next.has(buildId)) {
         next.delete(buildId);
@@ -96,7 +100,8 @@ export default function ProjectDetailPage() {
   }
 
   function yamlToString(snapshot: Record<string, unknown>): string {
-    if (!snapshot || Object.keys(snapshot).length === 0) return "(no config — server defaults used)";
+    if (!snapshot || Object.keys(snapshot).length === 0)
+      return "(no config - server defaults used)";
     try {
       return yamlDump(snapshot, { indent: 2, lineWidth: -1 }).trimEnd();
     } catch {
@@ -104,12 +109,16 @@ export default function ProjectDetailPage() {
     }
   }
 
-  function renderConfigSnapshot(snapshot: Record<string, unknown>): React.ReactNode {
+  function renderConfigSnapshot(
+    snapshot: Record<string, unknown>,
+  ): React.ReactNode {
     const yaml = yamlToString(snapshot);
     const lines = yaml.split("\n");
 
     return lines.map((line, idx) => {
-      const keyValueMatch = line.match(/^(\s*-?\s*)([^:#\n][^:]*)(\s*:\s*)(.*)$/);
+      const keyValueMatch = line.match(
+        /^(\s*-?\s*)([^:#\n][^:]*)(\s*:\s*)(.*)$/,
+      );
       const commentOnlyMatch = line.match(/^(\s*)(#.*)$/);
 
       const lineNode = (() => {
@@ -117,7 +126,9 @@ export default function ProjectDetailPage() {
           return (
             <>
               <span>{commentOnlyMatch[1]}</span>
-              <span className="text-emerald-600 dark:text-emerald-300">{commentOnlyMatch[2]}</span>
+              <span className="text-emerald-600 dark:text-emerald-300">
+                {commentOnlyMatch[2]}
+              </span>
             </>
           );
         }
@@ -150,7 +161,9 @@ export default function ProjectDetailPage() {
           return (
             <>
               <span>{indent}</span>
-              <span className="text-violet-700 dark:text-violet-300">{dash}</span>
+              <span className="text-violet-700 dark:text-violet-300">
+                {dash}
+              </span>
               <span className="text-on-surface">{value}</span>
             </>
           );
@@ -168,22 +181,28 @@ export default function ProjectDetailPage() {
     });
   }
 
-  const { can } = useAuth()
+  const { can } = useAuth();
   const { sessions } = useUpload();
   // Track session IDs we've already reacted to so we don't refetch repeatedly.
   const handledSessionsRef = useRef<Set<string>>(new Set());
 
-  // Abort controller for the initial page load — aborted on unmount or when
+  // Abort controller for the initial page load - aborted on unmount or when
   // envId/projectId change so stale responses never update state (M-19).
-  const initAbortRef = useRef<AbortController | null>(null)
+  const initAbortRef = useRef<AbortController | null>(null);
 
-  const fetchStats = useCallback((signal?: AbortSignal) => {
-    if (!envId || !projectId) return;
-    api
-      .getReportStats(envId, projectId, signal)
-      .then(setStats)
-      .catch((e: Error) => { if (e.name !== 'AbortError') {} });
-  }, [envId, projectId]);
+  const fetchStats = useCallback(
+    (signal?: AbortSignal) => {
+      if (!envId || !projectId) return;
+      api
+        .getReportStats(envId, projectId, signal)
+        .then(setStats)
+        .catch((e: Error) => {
+          if (e.name !== "AbortError") {
+          }
+        });
+    },
+    [envId, projectId],
+  );
 
   const fetchPage = useCallback(
     (filter: Filter, offset: number, append: boolean, signal?: AbortSignal) => {
@@ -203,19 +222,21 @@ export default function ProjectDetailPage() {
           setBuilds((prev) => (append ? [...prev, ...newBuilds] : newBuilds));
           setTotal(newTotal);
         })
-        .catch((e: Error) => { if (e.name !== 'AbortError') setError(e.message) })
+        .catch((e: Error) => {
+          if (e.name !== "AbortError") setError(e.message);
+        })
         .finally(() => setLoad(false));
     },
     [envId, projectId],
   );
 
   useEffect(() => {
-    initAbortRef.current?.abort()
-    const controller = new AbortController()
-    initAbortRef.current = controller
+    initAbortRef.current?.abort();
+    const controller = new AbortController();
+    initAbortRef.current = controller;
     fetchStats(controller.signal);
     fetchPage("ALL", 0, false, controller.signal);
-    return () => controller.abort()
+    return () => controller.abort();
   }, [fetchStats, fetchPage]);
 
   // When any upload session for this project completes, refresh builds + stats
@@ -224,13 +245,16 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!projectId) return;
     const newlyDone = sessions.filter(
-      (s) => s.projectId === projectId && s.phase === 'done' && !handledSessionsRef.current.has(s.id)
+      (s) =>
+        s.projectId === projectId &&
+        s.phase === "done" &&
+        !handledSessionsRef.current.has(s.id),
     );
     if (newlyDone.length === 0) return;
     newlyDone.forEach((s) => handledSessionsRef.current.add(s.id));
     fetchStats();
-    setActiveFilter('ALL');
-    fetchPage('ALL', 0, false);
+    setActiveFilter("ALL");
+    fetchPage("ALL", 0, false);
   }, [sessions, projectId, fetchStats, fetchPage]);
 
   function handleFilterChange(f: Filter) {
@@ -242,7 +266,6 @@ export default function ProjectDetailPage() {
   function handleLoadMore() {
     fetchPage(activeFilter, builds.length, true);
   }
-
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
@@ -272,7 +295,9 @@ export default function ProjectDetailPage() {
     setDeleting(true);
     try {
       await api.deleteReport(envId, projectId, pendingDelete.buildId);
-      setBuilds((prev) => prev.filter((b) => b.buildId !== pendingDelete.buildId));
+      setBuilds((prev) =>
+        prev.filter((b) => b.buildId !== pendingDelete.buildId),
+      );
       setTotal((t) => t - 1);
       fetchStats();
     } catch (err) {
@@ -294,18 +319,26 @@ export default function ProjectDetailPage() {
             className="flex items-center gap-1.5 px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors rounded-lg"
             aria-label="Back to Environments"
           >
-            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span className="material-symbols-outlined text-[18px]">
+              arrow_back
+            </span>
             <span className="text-xs font-label">Environments</span>
           </Link>
-          <span className="text-xs font-label text-on-surface-variant opacity-40">/</span>
+          <span className="text-xs font-label text-on-surface-variant opacity-40">
+            /
+          </span>
           <Link
             to={`/environments/${envId}`}
             className="text-xs font-label text-on-surface-variant hover:text-on-surface transition-colors px-1"
           >
             {envId}
           </Link>
-          <span className="text-xs font-label text-on-surface-variant opacity-40">/</span>
-          <span className="text-xs font-label text-on-surface">{projectId}</span>
+          <span className="text-xs font-label text-on-surface-variant opacity-40">
+            /
+          </span>
+          <span className="text-xs font-label text-on-surface">
+            {projectId}
+          </span>
         </div>
 
         {/* Page header */}
@@ -320,7 +353,7 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {can('upload') && (
+            {can("upload") && (
               <>
                 <button
                   type="button"
@@ -541,35 +574,66 @@ export default function ProjectDetailPage() {
                         </div>
                         {r.uploadedBy && (
                           <div className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[14px]">person</span>
+                            <span className="material-symbols-outlined text-[14px]">
+                              person
+                            </span>
                             <span>{r.uploadedBy}</span>
                           </div>
                         )}
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); toggleConfig(r.buildId); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleConfig(r.buildId);
+                          }}
                           className="flex items-center gap-1 text-on-surface-variant/70 hover:text-primary transition-colors"
                           aria-expanded={expandedConfigs.has(r.buildId)}
-                          aria-label={expandedConfigs.has(r.buildId) ? "Hide report config" : "Show report config"}
+                          aria-label={
+                            expandedConfigs.has(r.buildId)
+                              ? "Hide report config"
+                              : "Show report config"
+                          }
                         >
-                          <span className="material-symbols-outlined text-[13px]" aria-hidden="true">settings</span>
+                          <span
+                            className="material-symbols-outlined text-[13px]"
+                            aria-hidden="true"
+                          >
+                            settings
+                          </span>
                           <span className="text-[11px]">Config</span>
                         </button>
                         {(r.generationWarnings?.length ?? 0) > 0 && (
-                          <span className="material-symbols-outlined text-[12px] text-on-surface-variant/40" aria-hidden="true">
+                          <span
+                            className="material-symbols-outlined text-[12px] text-on-surface-variant/40"
+                            aria-hidden="true"
+                          >
                             chevron_right
                           </span>
                         )}
                         {(r.generationWarnings?.length ?? 0) > 0 && (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); toggleWarnings(r.buildId); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleWarnings(r.buildId);
+                            }}
                             className="flex items-center gap-1 text-amber-600/90 hover:text-amber-500 transition-colors"
                             aria-expanded={expandedWarnings.has(r.buildId)}
-                            aria-label={expandedWarnings.has(r.buildId) ? "Hide generation warnings" : "Show generation warnings"}
+                            aria-label={
+                              expandedWarnings.has(r.buildId)
+                                ? "Hide generation warnings"
+                                : "Show generation warnings"
+                            }
                           >
-                            <span className="material-symbols-outlined text-[13px]" aria-hidden="true">warning</span>
-                            <span className="text-[11px]">Warnings ({r.generationWarnings?.length ?? 0})</span>
+                            <span
+                              className="material-symbols-outlined text-[13px]"
+                              aria-hidden="true"
+                            >
+                              warning
+                            </span>
+                            <span className="text-[11px]">
+                              Warnings ({r.generationWarnings?.length ?? 0})
+                            </span>
                           </button>
                         )}
                       </div>
@@ -626,7 +690,7 @@ export default function ProjectDetailPage() {
                           chevron_right
                         </span>
                       </a>
-                      {can('manage') && (
+                      {can("manage") && (
                         <button
                           onClick={() => setPendingDelete(r)}
                           className="shrink-0 p-1.5 rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10
@@ -634,7 +698,12 @@ export default function ProjectDetailPage() {
                           title="Delete report"
                           aria-label={`Delete build #${r.buildId}`}
                         >
-                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+                          <span
+                            className="material-symbols-outlined text-[18px]"
+                            aria-hidden="true"
+                          >
+                            delete
+                          </span>
                         </button>
                       )}
                     </div>
@@ -642,7 +711,9 @@ export default function ProjectDetailPage() {
                   {expandedConfigs.has(r.buildId) && (
                     <div className="mx-7 mb-4 rounded-lg bg-surface-container border border-outline-variant/20 overflow-hidden">
                       <div className="flex items-center gap-2 px-3 py-2 border-b border-outline-variant/20 bg-surface-container-highest/40">
-                        <span className="material-symbols-outlined text-[14px] text-on-surface-variant">settings</span>
+                        <span className="material-symbols-outlined text-[14px] text-on-surface-variant">
+                          settings
+                        </span>
                         <span className="text-[11px] font-label font-bold uppercase tracking-wider text-on-surface-variant">
                           Effective allurerc.yml config
                         </span>
@@ -652,23 +723,29 @@ export default function ProjectDetailPage() {
                       </pre>
                     </div>
                   )}
-                  {expandedWarnings.has(r.buildId) && (r.generationWarnings?.length ?? 0) > 0 && (
-                    <div className="mx-7 mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 dark:border-amber-300/35 overflow-hidden">
-                      <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-500/25 dark:border-amber-300/35 bg-amber-500/15 dark:bg-amber-300/15">
-                        <span className="material-symbols-outlined text-[14px] text-amber-800 dark:text-amber-200">warning</span>
-                        <span className="text-[11px] font-label font-bold uppercase tracking-wider text-amber-900 dark:text-amber-100">
-                          Generation warnings
-                        </span>
+                  {expandedWarnings.has(r.buildId) &&
+                    (r.generationWarnings?.length ?? 0) > 0 && (
+                      <div className="mx-7 mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 dark:border-amber-300/35 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-500/25 dark:border-amber-300/35 bg-amber-500/15 dark:bg-amber-300/15">
+                          <span className="material-symbols-outlined text-[14px] text-amber-800 dark:text-amber-200">
+                            warning
+                          </span>
+                          <span className="text-[11px] font-label font-bold uppercase tracking-wider text-amber-900 dark:text-amber-100">
+                            Generation warnings
+                          </span>
+                        </div>
+                        <ul className="px-4 py-3 text-xs font-mono text-amber-950 dark:text-amber-50 leading-relaxed space-y-2">
+                          {(r.generationWarnings ?? []).map((warning, idx) => (
+                            <li
+                              key={`${r.buildId}-warning-${idx}`}
+                              className="break-words"
+                            >
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <ul className="px-4 py-3 text-xs font-mono text-amber-950 dark:text-amber-50 leading-relaxed space-y-2">
-                        {(r.generationWarnings ?? []).map((warning, idx) => (
-                          <li key={`${r.buildId}-warning-${idx}`} className="break-words">
-                            {warning}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                    )}
                 </div>
               );
             })}

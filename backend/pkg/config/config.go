@@ -12,7 +12,7 @@ import (
 )
 
 // ServerConfig holds HTTP server tuning parameters.
-// Critical for large (100–200 MB) file uploads — ReadTimeout must exceed the
+// Critical for large (100–200 MB) file uploads - ReadTimeout must exceed the
 // longest possible upload, and WriteTimeout must cover report serving and SSE.
 type ServerConfig struct {
 	Addr              string        `env:"ADDR"               envDefault:":8080"`
@@ -26,7 +26,7 @@ type ServerConfig struct {
 }
 
 // DBConfig holds database driver, DSN, and connection pool parameters.
-// DB_DSN is masked in log output — never printed in plaintext.
+// DB_DSN is masked in log output - never printed in plaintext.
 // For PostgreSQL use: postgres://user:password@host:5432/dbname?sslmode=require
 type DBConfig struct {
 	Driver          string        `env:"DB_DRIVER"           envDefault:"sqlite"`

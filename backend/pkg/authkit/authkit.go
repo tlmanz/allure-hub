@@ -3,9 +3,9 @@
 //
 // Roles (defined in policy.yaml):
 //
-//	admin     — full access (PermAll)
-//	developer — PermView + PermUpload
-//	viewer    — PermView only (default role for all authenticated users)
+//	admin     - full access (PermAll)
+//	developer - PermView + PermUpload
+//	viewer    - PermView only (default role for all authenticated users)
 package authkit
 
 const (

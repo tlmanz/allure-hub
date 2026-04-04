@@ -1,6 +1,6 @@
 // Package apikey provides bearer token API key authentication for programmatic
 // access (CI/CD pipelines, scripts). Keys are stored with only their SHA-256
-// hash in the database — the plaintext is shown once at creation and never
+// hash in the database - the plaintext is shown once at creation and never
 // persisted.
 //
 // Key format:  ah_<64 hex chars>   (ah_ prefix aids secret scanning)
@@ -27,7 +27,7 @@ import (
 )
 
 // Generate creates a new API key string and its SHA-256 hash.
-// The key is NOT persisted — callers must store the hash via APIKeyRepository.
+// The key is NOT persisted - callers must store the hash via APIKeyRepository.
 func Generate() (key, hash string, err error) {
 	b := make([]byte, 32)
 	if _, err = rand.Read(b); err != nil {
@@ -74,7 +74,7 @@ func (s *Store) ValidateKey(ctx context.Context, rawKey string) (*kit.User, erro
 	if rec.ExpiresAt != nil && time.Now().After(*rec.ExpiresAt) {
 		return nil, nil
 	}
-	// Update last_used_at asynchronously — non-blocking.
+	// Update last_used_at asynchronously - non-blocking.
 	go s.repo.UpdateLastUsed(ctx, rec.ID)
 	return &kit.User{
 		Email:    "apikey:" + rec.Name,

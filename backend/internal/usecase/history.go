@@ -15,7 +15,7 @@ import (
 func removeHistoryEntry(historyPath string, createdAt time.Time) error {
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
-		return nil // file doesn't exist — nothing to do
+		return nil // file doesn't exist - nothing to do
 	}
 
 	targetMs := createdAt.UnixMilli()

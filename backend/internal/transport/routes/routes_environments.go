@@ -9,7 +9,7 @@ import (
 )
 
 func RegisterEnvironmentRoutes(mux *http.ServeMux, auth *kit.Auth, eh *handler.EnvironmentHandler, ph *handler.ProjectHandler) {
-	// Environments — GET allows API keys, mutations are session-only
+	// Environments - GET allows API keys, mutations are session-only
 	mux.Handle("GET /api/environments", auth.Require(localauth.PermView)(http.HandlerFunc(eh.List)))
 	mux.Handle("POST /api/environments", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Create)))
 	mux.Handle("PATCH /api/environments/{envId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Update)))

@@ -258,7 +258,7 @@ func (s *UploadService) TrackStreamUpload(ctx context.Context, envID, projectID,
 	}
 	log.Debug("stream upload: save complete, transitioning to assembling")
 
-	// Use background context — the request context may be cancelled if the
+	// Use background context - the request context may be cancelled if the
 	// client closed the connection, but we still need to persist the final state.
 	sess.Phase = domain.PhaseAssembling
 	sess.ReceivedChunks = 1

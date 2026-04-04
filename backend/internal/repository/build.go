@@ -15,7 +15,7 @@ type BuildRepo struct{ db *DB }
 
 func NewBuildRepo(db *DB) *BuildRepo { return &BuildRepo{db} }
 
-// Save upserts a Build row — safe to call on re-runs.
+// Save upserts a Build row - safe to call on re-runs.
 func (r *BuildRepo) Save(ctx context.Context, b *domain.Build) error {
 	configJSON, err := json.Marshal(b.ConfigSnapshot)
 	if err != nil {

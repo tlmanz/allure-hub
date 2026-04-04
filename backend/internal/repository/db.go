@@ -9,10 +9,10 @@ import (
 
 	"go.uber.org/zap"
 
-	// SQLite driver — pure Go, no CGO required.
+	// SQLite driver - pure Go, no CGO required.
 	_ "modernc.org/sqlite"
 
-	// PostgreSQL driver — registers as "pgx".
+	// PostgreSQL driver - registers as "pgx".
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -103,7 +103,7 @@ func parseTimestamp(s string) (time.Time, error) {
 	if t, err := time.Parse("2006-01-02 15:04:05-07", s); err == nil {
 		return t.UTC(), nil
 	}
-	// SQLite default datetime format — no T separator, no timezone (UTC implied).
+	// SQLite default datetime format - no T separator, no timezone (UTC implied).
 	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
 		return t.UTC(), nil
 	}

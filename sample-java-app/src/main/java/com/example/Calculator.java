@@ -1,7 +1,7 @@
 package com.example;
 
 /**
- * Simple calculator — the class under test for the sample Allure report.
+ * Simple calculator - the class under test for the sample Allure report.
  */
 public class Calculator {
 
@@ -30,7 +30,7 @@ public class Calculator {
         return true;
     }
 
-    /** BUG: uses exp-1 instead of exp — intentional defect for demo. */
+    /** BUG: uses exp-1 instead of exp - intentional defect for demo. */
     public long power(int base, int exp) {
         if (exp == 0) return 1;
         long result = 1;
@@ -40,7 +40,7 @@ public class Calculator {
         return result;
     }
 
-    /** BUG: does not guard against negative input — intentional defect for demo. */
+    /** BUG: does not guard against negative input - intentional defect for demo. */
     public double squareRoot(double n) {
         return Math.sqrt(n);  // returns NaN for negatives instead of throwing
     }

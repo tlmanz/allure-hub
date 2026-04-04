@@ -19,7 +19,7 @@ All `/api/*` routes require authentication. Permission requirements are noted pe
 | `POST` | `/api/environments/{envId}/projects` | `manage` | Create a project |
 | `DELETE` | `/api/environments/{envId}/projects/{projectId}` | `manage` | Delete a project |
 
-## Upload — Strategy A: streaming
+## Upload - Strategy A: streaming
 
 Upload a single zip file in one request.
 
@@ -47,7 +47,7 @@ POST /api/environments/{envId}/projects/{projectId}/results
 
 Report generation is triggered automatically after the upload completes. The response is returned once the results are saved; generation runs server-side.
 
-## Upload — Strategy B: chunked
+## Upload - Strategy B: chunked
 
 For large files (>50 MB). Initialise, send chunks, then complete.
 
@@ -160,7 +160,7 @@ POST /api/environments/{envId}/projects/{projectId}/reports
 }
 ```
 
-`buildId` must match the one used during upload. `reportConfig` is optional — if omitted, the server's default `allurerc.yml` is used.
+`buildId` must match the one used during upload. `reportConfig` is optional - if omitted, the server's default `allurerc.yml` is used.
 
 The `reportConfig` body maps directly to the [allurerc.yml schema](https://allurereport.org/docs/reference-allurerc/). The server merges your overrides on top of its base config. Two keys are always server-controlled and cannot be overridden: `output` (report output path) and `historyPath` (trend chart history).
 
@@ -335,7 +335,7 @@ data: {"id":"...","title":"Report ready","severity":"success",...}
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/healthz` | None | Liveness probe — returns `200 OK` |
+| `GET` | `/api/healthz` | None | Liveness probe - returns `200 OK` |
 | `GET` | `/api/version` | None | Build version, time, and Go version |
 
 ### `/api/version` response
@@ -398,7 +398,7 @@ DELETE /api/settings/apikeys/{id}
 DELETE /api/settings/apikeys/{id}?action=delete
 ```
 
-- Default (`action` omitted or `action=revoke`): soft-delete — key is marked inactive but the record is retained.
+- Default (`action` omitted or `action=revoke`): soft-delete - key is marked inactive but the record is retained.
 - `action=delete`: permanently removes the key record.
 
 ### Users
@@ -515,7 +515,7 @@ PUT /api/settings/allure
 
 **Permission:** `manage` session + `admin` role
 
-Runs `npm install -g allure@<version>` on the server. The updated binary is used immediately for all subsequent report generations — no restart required.
+Runs `npm install -g allure@<version>` on the server. The updated binary is used immediately for all subsequent report generations - no restart required.
 
 **Body (JSON):**
 
@@ -633,7 +633,7 @@ Returns the most recent cleanup sweep records, ordered newest first. At most **5
 | `deletedCount` | Number of builds removed (or would-be removed in dry-run mode) |
 | `skippedCount` | Builds that encountered a per-record error and were skipped |
 | `dryRun` | Whether this run was a dry-run (no data was actually deleted) |
-| `errorMessage` | Present only on `failed` runs — the top-level error that aborted the sweep |
+| `errorMessage` | Present only on `failed` runs - the top-level error that aborted the sweep |
 
 ## Auth endpoints
 

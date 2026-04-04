@@ -10,7 +10,7 @@
 
 ## Local development
 
-=== "Terminal 1 — Backend"
+=== "Terminal 1 - Backend"
 
     ```bash
     cd backend
@@ -20,7 +20,7 @@
 
     The backend listens on `:8080`. It serves `/api/*`, `/auth/*`, and `/reports/*`.
 
-=== "Terminal 2 — Frontend"
+=== "Terminal 2 - Frontend"
 
     ```bash
     make dev-frontend

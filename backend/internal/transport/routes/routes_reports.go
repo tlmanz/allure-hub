@@ -9,7 +9,7 @@ import (
 )
 
 func RegisterReportRoutes(mux *http.ServeMux, auth *kit.Auth, rh *handler.ReportHandler, uh *handler.UploadSessionHandler) {
-	// Results upload — API keys allowed (primary CI/CD path)
+	// Results upload - API keys allowed (primary CI/CD path)
 	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/results", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadResultsStream)))
 	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.InitChunkedUpload)))
 	mux.Handle("PUT /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadChunk)))

@@ -32,7 +32,7 @@ type App struct {
 	cleanupSvc *usecase.CleanupService
 }
 
-// New wires all dependencies — repositories, services, HTTP router — and
+// New wires all dependencies - repositories, services, HTTP router - and
 // returns an App ready to serve. It does not start listening yet.
 func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	// ── Database ──────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ type FileStorage interface {
 // GenerateOptions carries arbitrary allurerc.yml overrides for a single report.
 // Overrides is a free-form map whose keys match allurerc.yml field names.
 // Fields absent from Overrides keep their value from the base config file.
-// The "output" key is always ignored — the backend controls the output path.
+// The "output" key is always ignored - the backend controls the output path.
 type GenerateOptions struct {
 	Overrides map[string]any
 }

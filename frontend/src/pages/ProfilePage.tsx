@@ -1,31 +1,42 @@
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from "../context/AuthContext";
 
 const ROLE_LABEL: Record<string, { label: string; color: string }> = {
-  admin:     { label: 'Admin',     color: 'bg-primary/10 text-primary' },
-  developer: { label: 'Developer', color: 'bg-secondary/10 text-secondary' },
-  viewer:    { label: 'Viewer',    color: 'bg-surface-container-high text-on-surface-variant' },
-}
+  admin: { label: "Admin", color: "bg-primary/10 text-primary" },
+  developer: { label: "Developer", color: "bg-secondary/10 text-secondary" },
+  viewer: {
+    label: "Viewer",
+    color: "bg-surface-container-high text-on-surface-variant",
+  },
+};
 
 const PROVIDER_ICON: Record<string, string> = {
-  google: 'g_translate',
-  github: 'code',
-  local:  'lock',
-}
+  google: "g_translate",
+  github: "code",
+  local: "lock",
+};
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth()
+  const { user, logout } = useAuth();
 
-  if (!user) return null
+  if (!user) return null;
 
-  const role = ROLE_LABEL[user.role] ?? { label: user.role, color: 'bg-surface-container-high text-on-surface-variant' }
-  const providerIcon = PROVIDER_ICON[user.provider] ?? 'account_circle'
+  const role = ROLE_LABEL[user.role] ?? {
+    label: user.role,
+    color: "bg-surface-container-high text-on-surface-variant",
+  };
+  const providerIcon = PROVIDER_ICON[user.provider] ?? "account_circle";
 
-  const fields: { icon: string; label: string; value: string; lowercase?: boolean }[] = [
-    { icon: 'badge',                label: 'Display name', value: user.name || '—'  },
-    { icon: 'email',                label: 'Email',        value: user.email, lowercase: true },
-    { icon: 'login',                label: 'Provider',     value: user.provider    },
-    { icon: 'admin_panel_settings', label: 'Role',         value: user.role        },
-  ]
+  const fields: {
+    icon: string;
+    label: string;
+    value: string;
+    lowercase?: boolean;
+  }[] = [
+    { icon: "badge", label: "Display name", value: user.name || "-" },
+    { icon: "email", label: "Email", value: user.email, lowercase: true },
+    { icon: "login", label: "Provider", value: user.provider },
+    { icon: "admin_panel_settings", label: "Role", value: user.role },
+  ];
 
   return (
     <div className="max-w-xl mx-auto py-10">
@@ -33,8 +44,8 @@ export default function ProfilePage() {
       <div
         className="rounded-2xl p-8 flex flex-col items-center text-center mb-6 border"
         style={{
-          background: 'rgb(var(--color-surface-container-low))',
-          borderColor: 'rgb(var(--color-outline-variant) / 0.25)',
+          background: "rgb(var(--color-surface-container-low))",
+          borderColor: "rgb(var(--color-outline-variant) / 0.25)",
         }}
       >
         {user.avatarUrl ? (
@@ -55,14 +66,20 @@ export default function ProfilePage() {
         <h2 className="text-2xl font-headline font-bold text-on-surface tracking-tight">
           {user.name || user.email}
         </h2>
-        <p className="text-sm text-on-surface-variant font-body mt-1">{user.email}</p>
+        <p className="text-sm text-on-surface-variant font-body mt-1">
+          {user.email}
+        </p>
 
         <div className="flex items-center gap-2 mt-3">
-          <span className={`text-xs font-bold font-label px-2.5 py-1 rounded-full capitalize ${role.color}`}>
+          <span
+            className={`text-xs font-bold font-label px-2.5 py-1 rounded-full capitalize ${role.color}`}
+          >
             {role.label}
           </span>
           <span className="flex items-center gap-1 text-xs font-label text-on-surface-variant px-2.5 py-1 rounded-full bg-surface-container-high capitalize">
-            <span className="material-symbols-outlined text-[13px]">{providerIcon}</span>
+            <span className="material-symbols-outlined text-[13px]">
+              {providerIcon}
+            </span>
             {user.provider}
           </span>
         </div>
@@ -72,15 +89,15 @@ export default function ProfilePage() {
       <div
         className="rounded-2xl border overflow-hidden"
         style={{
-          background: 'rgb(var(--color-surface-container-low))',
-          borderColor: 'rgb(var(--color-outline-variant) / 0.25)',
+          background: "rgb(var(--color-surface-container-low))",
+          borderColor: "rgb(var(--color-outline-variant) / 0.25)",
         }}
       >
         {fields.map(({ icon, label, value, lowercase }) => (
           <div key={label} className="flex items-center gap-4 px-6 py-4">
             <span
               className="material-symbols-outlined text-[20px] shrink-0"
-              style={{ color: 'rgb(var(--color-on-surface-variant))' }}
+              style={{ color: "rgb(var(--color-on-surface-variant))" }}
             >
               {icon}
             </span>
@@ -88,7 +105,11 @@ export default function ProfilePage() {
               <p className="text-[11px] font-label font-semibold uppercase tracking-widest text-on-surface-variant mb-0.5">
                 {label}
               </p>
-              <p className={`text-sm font-body text-on-surface truncate ${lowercase ? 'lowercase' : 'capitalize'}`}>{value}</p>
+              <p
+                className={`text-sm font-body text-on-surface truncate ${lowercase ? "lowercase" : "capitalize"}`}
+              >
+                {value}
+              </p>
             </div>
           </div>
         ))}
@@ -104,5 +125,5 @@ export default function ProfilePage() {
         Sign out
       </button>
     </div>
-  )
+  );
 }

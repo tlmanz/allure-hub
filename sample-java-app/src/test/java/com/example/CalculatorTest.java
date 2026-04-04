@@ -195,11 +195,11 @@ class CalculatorTest {
     @Story("Integer exponentiation")
     @Severity(SeverityLevel.CRITICAL)
     @Issue("CALC-42")
-    @Description("2^10 should be 1024. Known off-by-one bug in power() — intentional defect.")
+    @Description("2^10 should be 1024. Known off-by-one bug in power() - intentional defect.")
     @Test
     void powerOfTwo() {
         long result = calc.power(2, 10);
-        assertEquals(1024L, result, "2^10 must equal 1024 (got " + result + " — off-by-one bug)");
+        assertEquals(1024L, result, "2^10 must equal 1024 (got " + result + " - off-by-one bug)");
     }
 
     @Feature("Power")
@@ -218,7 +218,7 @@ class CalculatorTest {
     @Test
     void powerNegativeBase() {
         long result = calc.power(-2, 3);
-        assertEquals(-8L, result, "(-2)^3 must equal -8 (got " + result + " — off-by-one bug)");
+        assertEquals(-8L, result, "(-2)^3 must equal -8 (got " + result + " - off-by-one bug)");
     }
 
     // ── Square root ──────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ class CalculatorTest {
     @Severity(SeverityLevel.BLOCKER)
     @Issue("CALC-44")
     @Description("squareRoot of a negative number must throw ArithmeticException. " +
-                 "Currently returns NaN — missing validation, intentional defect.")
+                 "Currently returns NaN - missing validation, intentional defect.")
     @Test
     void squareRootOfNegativeShouldThrow() {
         assertThrows(ArithmeticException.class,

@@ -92,7 +92,7 @@ func testRepositories(t *testing.T, driver, dsn string) {
 		t.Errorf("build stats: passed=%d failed=%d, want 42/3", builds[0].Passed, builds[0].Failed)
 	}
 
-	// Upsert — re-save with updated stats
+	// Upsert - re-save with updated stats
 	b.Passed = 50
 	b.Failed = 0
 	if err := buildRepo.Save(ctx, b); err != nil {

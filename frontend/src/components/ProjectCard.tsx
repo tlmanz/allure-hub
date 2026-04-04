@@ -20,9 +20,9 @@ export interface ProjectCardProps {
 const CIRCUMFERENCE = 2 * Math.PI * 28; // r=28
 
 const statusConfig = {
-  passed:   { label: "Live Production", labelColor: "text-primary" },
-  failed:   { label: "Degraded",        labelColor: "text-error" },
-  inactive: { label: "No Runs Yet",     labelColor: "text-on-surface-variant" },
+  passed: { label: "Live Production", labelColor: "text-primary" },
+  failed: { label: "Degraded", labelColor: "text-error" },
+  inactive: { label: "No Runs Yet", labelColor: "text-on-surface-variant" },
 };
 
 const MIN_SEG = 4; // minimum SVG units to render a segment
@@ -34,12 +34,17 @@ interface SegmentRingProps {
   label: string;
 }
 
-const SegmentRing: React.FC<SegmentRingProps> = ({ passed, failed, total, label }) => {
+const SegmentRing: React.FC<SegmentRingProps> = ({
+  passed,
+  failed,
+  total,
+  label,
+}) => {
   const skipped = Math.max(0, total - passed - failed);
   const hasData = total > 0;
 
-  const pLen = hasData ? (passed  / total) * CIRCUMFERENCE : 0;
-  const fLen = hasData ? (failed  / total) * CIRCUMFERENCE : 0;
+  const pLen = hasData ? (passed / total) * CIRCUMFERENCE : 0;
+  const fLen = hasData ? (failed / total) * CIRCUMFERENCE : 0;
   const sLen = hasData ? (skipped / total) * CIRCUMFERENCE : 0;
 
   // Each circle: dasharray=[segLen, rest], dashoffset=C-startPos
@@ -47,7 +52,9 @@ const SegmentRing: React.FC<SegmentRingProps> = ({ passed, failed, total, label 
     if (len < MIN_SEG) return null;
     return (
       <circle
-        cx="32" cy="32" r="28"
+        cx="32"
+        cy="32"
+        r="28"
         fill="none"
         stroke={color}
         strokeWidth="6"
@@ -62,11 +69,18 @@ const SegmentRing: React.FC<SegmentRingProps> = ({ passed, failed, total, label 
     <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
       <svg className="w-full h-full -rotate-90" viewBox="0 0 64 64">
         {/* Track */}
-        <circle cx="32" cy="32" r="28" fill="none" stroke="rgb(var(--color-surface-container-high))" strokeWidth="6" />
+        <circle
+          cx="32"
+          cy="32"
+          r="28"
+          fill="none"
+          stroke="rgb(var(--color-surface-container-high))"
+          strokeWidth="6"
+        />
         {hasData && (
           <>
-            {arc(pLen, 0,          "#10b981")}
-            {arc(fLen, pLen,        "#ef4444")}
+            {arc(pLen, 0, "#10b981")}
+            {arc(fLen, pLen, "#ef4444")}
             {arc(sLen, pLen + fLen, "#f59e0b")}
           </>
         )}
@@ -94,9 +108,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const cfg      = statusConfig[status];
-  const ringPct   = lastTotal > 0 ? Math.round((lastPassed / lastTotal) * 100) : 0;
-  const ringLabel = lastTotal === 0 ? "—" : `${ringPct}%`;
+  const cfg = statusConfig[status];
+  const ringPct =
+    lastTotal > 0 ? Math.round((lastPassed / lastTotal) * 100) : 0;
+  const ringLabel = lastTotal === 0 ? "-" : `${ringPct}%`;
 
   async function handleDelete() {
     setDeleting(true);
@@ -106,7 +121,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       setModalOpen(false);
       onDeleted?.();
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : 'Delete failed. Please try again.');
+      setDeleteError(
+        e instanceof Error ? e.message : "Delete failed. Please try again.",
+      );
     } finally {
       setDeleting(false);
     }
@@ -122,7 +139,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     <>
       <DeleteConfirmModal
         isOpen={modalOpen}
-        onClose={() => { setModalOpen(false); setDeleteError(null); }}
+        onClose={() => {
+          setModalOpen(false);
+          setDeleteError(null);
+        }}
         onConfirm={handleDelete}
         title="Delete Project"
         description="This will permanently remove the project and all its data. This action cannot be undone."
@@ -140,17 +160,24 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <div className="flex justify-between items-start mb-8">
           <div className="min-w-0 flex-1 pr-4">
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-label font-bold uppercase tracking-[0.2em] ${cfg.labelColor}`}>
+              <span
+                className={`text-[10px] font-label font-bold uppercase tracking-[0.2em] ${cfg.labelColor}`}
+              >
                 {cfg.label}
               </span>
-              {can('manage') && (
+              {can("manage") && (
                 <button
                   onClick={handleDeleteClick}
                   className="ml-auto p-1 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-error/10 hover:text-error text-on-surface-variant transition-all"
                   title="Delete project"
                   aria-label={`Delete project ${name}`}
                 >
-                  <span className="material-symbols-outlined text-[14px]" aria-hidden="true">delete</span>
+                  <span
+                    className="material-symbols-outlined text-[14px]"
+                    aria-hidden="true"
+                  >
+                    delete
+                  </span>
                 </button>
               )}
             </div>
@@ -161,7 +188,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               {id}
             </p>
           </div>
-          <SegmentRing passed={lastPassed} failed={lastFailed} total={lastTotal} label={ringLabel} />
+          <SegmentRing
+            passed={lastPassed}
+            failed={lastFailed}
+            total={lastTotal}
+            label={ringLabel}
+          />
         </div>
 
         {/* Bottom: bento stat grid */}
@@ -179,7 +211,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               Tests
             </p>
             <p className="text-lg font-headline font-bold text-on-surface">
-              {lastTotal > 0 ? lastTotal.toLocaleString() : "—"}
+              {lastTotal > 0 ? lastTotal.toLocaleString() : "-"}
             </p>
           </div>
           <div className="bg-surface-container-high rounded-lg p-3">

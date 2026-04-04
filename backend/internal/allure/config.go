@@ -51,7 +51,7 @@ var serverControlledKeys = map[string]struct{}{
 // the user-visible config snapshot (base merged with safe overrides, without
 // server-controlled keys so the snapshot is meaningful to the user).
 //
-// base is the pre-parsed config map cached at startup (read-only — deepMerge
+// base is the pre-parsed config map cached at startup (read-only - deepMerge
 // never mutates it).  The caller's Overrides are merged on top so only the
 // fields they supplied change; everything else keeps the base value.
 // serverControlledKeys are stripped from Overrides before the merge so callers

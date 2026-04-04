@@ -68,7 +68,7 @@ func (f *Filesystem) HistoryFile(envID, projectID string) string {
 }
 
 // SaveResultsStream reads a zip from r and extracts it directly to the
-// results directory. r is consumed with io.Copy in 32 KB chunks — the
+// results directory. r is consumed with io.Copy in 32 KB chunks - the
 // full zip is never in memory at once.
 func (f *Filesystem) SaveResultsStream(envID, projectID, buildID string, r io.Reader) error {
 	dest := f.ResultsDir(envID, projectID, buildID)
@@ -96,7 +96,7 @@ func (f *Filesystem) SaveResultsStream(envID, projectID, buildID string, r io.Re
 		limitN = f.maxBytes + 1
 		src = &io.LimitedReader{R: r, N: limitN}
 	}
-	written, err := io.Copy(tmp, src) // 32 KB copy loop — no full file in RAM
+	written, err := io.Copy(tmp, src) // 32 KB copy loop - no full file in RAM
 	if err != nil {
 		return fmt.Errorf("stream to disk: %w", err)
 	}
@@ -132,7 +132,7 @@ func unzip(rs io.ReadSeeker, size int64, dest string, maxDecompressed int64, max
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		// Only extract flat files — ignore any directory nesting in the zip.
+		// Only extract flat files - ignore any directory nesting in the zip.
 		name := filepath.Base(f.Name)
 		// Reject path traversal attempts and hidden files.
 		if name == "." || name == ".." || name == "" || name[0] == '.' {

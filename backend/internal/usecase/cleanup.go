@@ -151,7 +151,7 @@ func (s *CleanupService) sweep(ctx context.Context, run *domain.CleanupRun) erro
 		)
 
 		if cfg.DryRun {
-			blog.Info("cleanup: dry-run — would delete build")
+			blog.Info("cleanup: dry-run - would delete build")
 			run.DeletedCount++
 			continue
 		}

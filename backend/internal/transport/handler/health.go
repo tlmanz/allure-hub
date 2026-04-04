@@ -28,7 +28,7 @@ func NewHealthHandler(db interface{ Ping() error }) *HealthHandler {
 func (h *HealthHandler) Check(w http.ResponseWriter, r *http.Request) {
 	dbStatus := "ok"
 	if err := h.db.Ping(); err != nil {
-		// Do not expose raw error — it may contain hostnames or DSN details (L-07).
+		// Do not expose raw error - it may contain hostnames or DSN details (L-07).
 		dbStatus = "unavailable"
 	}
 

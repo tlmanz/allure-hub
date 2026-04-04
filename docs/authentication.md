@@ -46,7 +46,7 @@ BASE_URL=https://your-domain.com
 
 ## RBAC policy
 
-Create `backend/policy.yaml` (gitignored). The file is watched and hot-reloaded every 30 seconds — no restart needed.
+Create `backend/policy.yaml` (gitignored). The file is watched and hot-reloaded every 30 seconds - no restart needed.
 
 ```yaml
 roles:
@@ -153,7 +153,7 @@ curl -H "Authorization: Bearer ah_..." \
 
 API keys are managed from the **Settings > API Keys** page (requires `manage` permission and an active browser session). Keys cannot be used to manage other keys.
 
-You can also manage keys via the API — see [Settings endpoints](api.md#settings).
+You can also manage keys via the API - see [Settings endpoints](api.md#settings).
 
 ### Key lifecycle
 
@@ -169,7 +169,7 @@ stateDiagram-v2
 | State | Description |
 |---|---|
 | **Active** | Key is valid and can authenticate requests |
-| **Revoked** | Soft-deleted — key is rejected but the record is retained for audit |
+| **Revoked** | Soft-deleted - key is rejected but the record is retained for audit |
 | **Deleted** | Permanently removed |
 
 The last-used timestamp is updated asynchronously on each successful authentication.
@@ -181,7 +181,7 @@ When a request is authenticated with an API key, the uploader is recorded as `ap
 ## Session security
 
 !!! danger "Production checklist"
-    - Set `SECURE_COOKIE=true` — requires HTTPS
+    - Set `SECURE_COOKIE=true` - requires HTTPS
     - Generate a strong secret: `openssl rand -hex 32`
     - The secret must remain stable across restarts (changing it invalidates all sessions)
 

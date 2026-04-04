@@ -42,7 +42,7 @@ func (s *RoleStore) GetOverride(ctx context.Context, email string) (string, []st
 }
 
 // SetOverride creates or replaces the role override for email.
-// Prefer calling LayeredPolicyProvider.SetOverride — it validates inputs before
+// Prefer calling LayeredPolicyProvider.SetOverride - it validates inputs before
 // writing here.
 func (s *RoleStore) SetOverride(ctx context.Context, email, role string, permissions []string) error {
 	permsJSON, err := json.Marshal(permissions)

@@ -77,7 +77,7 @@ func NewRouter(
 		mux.Handle("/api/notifications/", auth.Require(localauth.PermView)(notifier.Handler("/api/notifications")))
 	}
 
-	// Serve generated Allure reports — requires PermView (session or API key).
+	// Serve generated Allure reports - requires PermView (session or API key).
 	mux.Handle("/reports/", auth.Require(localauth.PermView)(reportsHandler(rcfg.DataDir)))
 	if rcfg.WebDir != "" {
 		mux.Handle("/", spaHandler(rcfg.WebDir))

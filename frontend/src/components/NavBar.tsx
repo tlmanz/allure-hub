@@ -40,7 +40,8 @@ const NavBar: React.FC = React.memo(() => {
   const { sessions, drawerOpen, openDrawer, closeDrawer } = useUpload();
   const health = useHealthStatus();
   const { user, logout, can } = useAuth();
-  const { notifications, unseenCount, markAsRead, clearUnseen } = useNotification();
+  const { notifications, unseenCount, markAsRead, clearUnseen } =
+    useNotification();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -50,19 +51,23 @@ const NavBar: React.FC = React.memo(() => {
 
   // Check for a newer Allure version once on mount (manage-permission users only).
   useEffect(() => {
-    if (!can('manage')) return;
-    api.getAllureVersion()
+    if (!can("manage")) return;
+    api
+      .getAllureVersion()
       .then(({ version, latest }) => {
         if (latest && latest !== version) setAllureUpdateAvailable(true);
       })
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!userMenuOpen) return;
     function handleClickOutside(e: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
         setUserMenuOpen(false);
       }
     }
@@ -222,7 +227,7 @@ const NavBar: React.FC = React.memo(() => {
               ? "Checking"
               : "Offline"}
         </div>
-        {/* Activity toggle — only visible on project detail pages */}
+        {/* Activity toggle - only visible on project detail pages */}
         {currentProjectId && (
           <button
             onClick={() => (drawerOpen ? closeDrawer() : openDrawer())}
@@ -248,15 +253,17 @@ const NavBar: React.FC = React.memo(() => {
         {/* Notifications bell */}
         <div className="relative" ref={bellRef}>
           <button
-            onClick={() => setBellOpen(o => !o)}
+            onClick={() => setBellOpen((o) => !o)}
             className="relative p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             aria-label="Notifications"
             title="Notifications"
           >
-            <span className="material-symbols-outlined text-[20px]">notifications</span>
+            <span className="material-symbols-outlined text-[20px]">
+              notifications
+            </span>
             {unseenCount > 0 && (
               <span className="absolute top-1 right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold font-label flex items-center justify-center leading-none">
-                {unseenCount > 9 ? '9+' : unseenCount}
+                {unseenCount > 9 ? "9+" : unseenCount}
               </span>
             )}
           </button>
@@ -264,11 +271,16 @@ const NavBar: React.FC = React.memo(() => {
           {bellOpen && (
             <div
               className="absolute right-0 top-full mt-1 w-80 rounded-xl border shadow-lg z-50 overflow-hidden"
-              style={{ background: 'rgb(var(--color-surface-container))', borderColor: 'rgb(var(--color-outline-variant) / 0.4)' }}
+              style={{
+                background: "rgb(var(--color-surface-container))",
+                borderColor: "rgb(var(--color-outline-variant) / 0.4)",
+              }}
             >
               <div
                 className="px-4 py-2.5 border-b flex items-center justify-between gap-3"
-                style={{ borderColor: 'rgb(var(--color-outline-variant) / 0.3)' }}
+                style={{
+                  borderColor: "rgb(var(--color-outline-variant) / 0.3)",
+                }}
               >
                 <span className="text-xs font-label font-bold uppercase tracking-widest text-on-surface-variant">
                   Notifications
@@ -285,44 +297,61 @@ const NavBar: React.FC = React.memo(() => {
               </div>
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-[32px] mb-2 opacity-30">notifications_off</span>
+                  <span className="material-symbols-outlined text-[32px] mb-2 opacity-30">
+                    notifications_off
+                  </span>
                   <p className="text-xs">No notifications yet</p>
                 </div>
               ) : (
-                <ul className="max-h-72 overflow-y-auto divide-y" style={{ borderColor: 'rgb(var(--color-outline-variant) / 0.15)' }}>
-                  {notifications.map(n => (
+                <ul
+                  className="max-h-72 overflow-y-auto divide-y"
+                  style={{
+                    borderColor: "rgb(var(--color-outline-variant) / 0.15)",
+                  }}
+                >
+                  {notifications.map((n) => (
                     <li
                       key={n.id}
                       className={`flex items-start gap-3 px-4 py-3 transition-colors ${
                         n.read
-                          ? 'hover:bg-black/5 dark:hover:bg-white/5'
-                          : 'bg-primary/5 hover:bg-primary/10 dark:hover:bg-primary/15'
+                          ? "hover:bg-black/5 dark:hover:bg-white/5"
+                          : "bg-primary/5 hover:bg-primary/10 dark:hover:bg-primary/15"
                       }`}
                     >
-                      <span className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${
-                        n.variant === 'error'
-                          ? 'text-error'
-                          : n.variant === 'warning'
-                            ? 'text-amber-500'
-                            : n.variant === 'info'
-                              ? 'text-sky-500'
-                              : 'text-emerald-500'
-                      }`}>
-                        {n.variant === 'error'
-                          ? 'error'
-                          : n.variant === 'warning'
-                            ? 'warning'
-                            : n.variant === 'info'
-                              ? 'info'
-                              : 'check_circle'}
+                      <span
+                        className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${
+                          n.variant === "error"
+                            ? "text-error"
+                            : n.variant === "warning"
+                              ? "text-amber-500"
+                              : n.variant === "info"
+                                ? "text-sky-500"
+                                : "text-emerald-500"
+                        }`}
+                      >
+                        {n.variant === "error"
+                          ? "error"
+                          : n.variant === "warning"
+                            ? "warning"
+                            : n.variant === "info"
+                              ? "info"
+                              : "check_circle"}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs leading-snug ${n.read ? 'text-on-surface' : 'text-on-surface font-semibold'}`}>
+                        <p
+                          className={`text-xs leading-snug ${n.read ? "text-on-surface" : "text-on-surface font-semibold"}`}
+                        >
                           {n.message}
                         </p>
                         <p className="text-[10px] text-on-surface-variant mt-0.5 flex items-center gap-1.5">
-                          {n.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          {!n.read && <span className="w-1 h-1 rounded-full bg-primary" />}
+                          {n.timestamp.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                          {!n.read && (
+                            <span className="w-1 h-1 rounded-full bg-primary" />
+                          )}
                         </p>
                       </div>
                       {!n.read && (

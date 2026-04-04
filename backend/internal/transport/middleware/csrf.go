@@ -11,7 +11,7 @@ var stateMethods = map[string]bool{
 
 // CSRF rejects browser-initiated state-changing requests that lack the
 // X-Requested-With header. Only requests that carry an Origin header are
-// checked — direct API calls (curl, CI pipelines) have no Origin and cannot
+// checked - direct API calls (curl, CI pipelines) have no Origin and cannot
 // be CSRF attacks, so they are passed through unconditionally.
 func CSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

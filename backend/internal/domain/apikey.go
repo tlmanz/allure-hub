@@ -14,7 +14,7 @@ type APIKey struct {
 	Name       string     `json:"name"`
 	CreatedBy  string     `json:"createdBy"` // email of the admin who created it
 	Role       string     `json:"role"`
-	KeyHash    string     `json:"-"` // hex(SHA-256(plaintext)) — never sent to clients
+	KeyHash    string     `json:"-"` // hex(SHA-256(plaintext)) - never sent to clients
 	LastUsedAt *time.Time `json:"lastUsedAt"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`

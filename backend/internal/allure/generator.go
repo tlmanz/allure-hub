@@ -81,7 +81,7 @@ func (g *Generator) Generate(resultsDir, outputDir, historyPath string, opts use
 	}
 	tmpCfg.Close()
 
-	// Acquire semaphore slot — blocks if maxConcurrency allure processes are
+	// Acquire semaphore slot - blocks if maxConcurrency allure processes are
 	// already running, providing back-pressure under high load.
 	g.sem <- struct{}{}
 	defer func() { <-g.sem }()
