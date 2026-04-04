@@ -1,4 +1,4 @@
-import type { Environment, Project, Report, ReportStats, PagedReports, PagedAPIKeys, PagedUsers, UploadSession, APIKey, RetentionSettings, CleanupRun } from '../types'
+import type { Environment, Project, Report, ReportStats, PagedReports, PagedAPIKeys, PagedUsers, UploadSession, APIKey, RetentionSettings, CleanupRun, OverviewStats, DiskUsage, NotificationItem } from '../types'
 
 const BASE = '/api'
 
@@ -103,6 +103,19 @@ export const api = {
   deleteUploadSession: (id: string) =>
     request<void>(`/uploads/${enc(id)}`, { method: 'DELETE' }),
 
+  // Notifications
+  listNotifications: (limit = 50) =>
+    request<NotificationItem[]>(`/notifications?limit=${limit}`).then(d => d ?? []),
+
+  getUnreadNotificationCount: () =>
+    request<{ count: number }>('/notifications/unread').then(d => d?.count ?? 0),
+
+  markNotificationRead: (id: string) =>
+    request<void>(`/notifications/${enc(id)}/read`, { method: 'PATCH' }),
+
+  markAllNotificationsRead: () =>
+    request<void>('/notifications/read', { method: 'POST' }),
+
   // Settings — API keys
   listAPIKeys: (search = '', offset = 0) =>
     request<PagedAPIKeys>(`/settings/apikeys?search=${enc(search)}&offset=${offset}`),
@@ -134,6 +147,10 @@ export const api = {
   resetUserRole: (email: string) =>
     request<void>(`/settings/users/${enc(email)}/role`, { method: 'DELETE' }),
 
+  // Overview analytics
+  getOverviewStats: (signal?: AbortSignal) =>
+    request<OverviewStats>('/overview', { signal }),
+
   // Settings — data retention
   getRetentionSettings: () =>
     request<RetentionSettings>('/settings/retention'),
@@ -146,6 +163,31 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
+    }),
+
+  // Settings — Allure CLI version
+  getAllureVersion: () =>
+    request<{ version: string; latest: string }>('/settings/allure'),
+
+  updateAllureVersion: (version: string) =>
+    request<{ version: string }>('/settings/allure', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }),
+    }),
+
+  // Settings — disk usage
+  getDiskUsage: () =>
+    request<DiskUsage>('/settings/disk'),
+
+  getDiskNotificationThreshold: () =>
+    request<{ thresholdPercent: number }>('/settings/disk/notification-threshold'),
+
+  setDiskNotificationThreshold: (thresholdPercent: number) =>
+    request<void>('/settings/disk/notification-threshold', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thresholdPercent }),
     }),
 
   // Chunked upload — drives Init → Chunks → Complete → Generate.

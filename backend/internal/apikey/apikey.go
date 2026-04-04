@@ -75,7 +75,7 @@ func (s *Store) ValidateKey(ctx context.Context, rawKey string) (*kit.User, erro
 		return nil, nil
 	}
 	// Update last_used_at asynchronously — non-blocking.
-	go s.repo.UpdateLastUsed(context.Background(), rec.ID)
+	go s.repo.UpdateLastUsed(ctx, rec.ID)
 	return &kit.User{
 		Email:    "apikey:" + rec.Name,
 		Name:     rec.Name,

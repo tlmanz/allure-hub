@@ -56,6 +56,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	apiKeyRepo := repository.NewAPIKeyRepo(db)
 	settingsRepo := repository.NewSystemSettingsRepo(db)
 	cleanupRunRepo := repository.NewCleanupRunRepo(db)
+	overviewRepo := repository.NewOverviewRepo(db)
 
 	// ── Infrastructure adapters ───────────────────────────────────────────────
 	fs := storage.NewFilesystem(
@@ -72,6 +73,11 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		log,
 	)
 	bus := usecase.NewEventBus()
+	notifier, closeNotifyRepo, err := newNotifier(cfg.Notify, log)
+	if err != nil {
+		return nil, err
+	}
+	bus.SetNotifier(notifier)
 
 	// ── Services ──────────────────────────────────────────────────────────────
 	envSvc := usecase.NewEnvironmentService(envRepo, projectRepo, buildRepo, sessionRepo, fs)
@@ -86,47 +92,21 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	apiKeySvc := usecase.NewAPIKeyService(apiKeyRepo)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
-	roleStore := repository.NewRoleStore(db)
-	zapLogger := transport.NewZapAuthLogger(log)
-	provider, err := authkit.NewLayeredProvider(cfg.Auth.PolicyFile, roleStore,
-		authkit.WithLogger(zapLogger),
-	)
+	auth, provider, providerCount, err := newAuth(cfg.Auth, db, keyStore, log)
 	if err != nil {
-		return nil, fmt.Errorf("authkit: layered provider: %w", err)
+		return nil, err
 	}
-
-	var providers []authkit.ProviderConfig
-	if cfg.Auth.GoogleClientID != "" && cfg.Auth.GoogleClientSecret != "" {
-		providers = append(providers, authkit.ProviderConfig{
-			Name:         "google",
-			ClientID:     cfg.Auth.GoogleClientID,
-			ClientSecret: cfg.Auth.GoogleClientSecret,
-		})
-	}
-	auth, err := authkit.New(authkit.Config{
-		Providers:       providers,
-		CallbackBaseURL: cfg.Auth.BaseURL,
-		SessionSecret:   cfg.Auth.SessionSecret,
-		SecureCookie:    cfg.Auth.SecureCookie,
-		AfterLoginURL:   cfg.Auth.AfterLoginURL,
-		AfterLogoutURL:  cfg.Auth.AfterLogoutURL,
-		RBAC:            authkit.RBACConfig{Provider: provider},
-		Logger:          zapLogger,
-		APIKeyValidator: keyStore,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("authkit: %w", err)
-	}
-	log.Info("authkit initialised", zap.Int("providers", len(providers)))
+	log.Info("authkit initialised", zap.Int("providers", providerCount))
 
 	// ── HTTP layer ────────────────────────────────────────────────────────────
 	router := transport.NewRouter(
 		db,
 		envSvc, projectSvc, reportSvc, uploadSvc,
-		sessionRepo, bus,
+		sessionRepo, bus, notifier,
 		auth, provider,
-		apiKeySvc, userRepo,
+		apiKeySvc, userRepo, settingsRepo,
 		cleanupSvc,
+		overviewRepo,
 		transport.RouterConfig{
 			DataDir:        cfg.Storage.DataDir,
 			WebDir:         cfg.Server.WebDir,
@@ -136,6 +116,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 			RateLimitRate:  cfg.RateLimit.Rate,
 			RateLimitBurst: cfg.RateLimit.Burst,
 			TrustProxy:     cfg.RateLimit.TrustProxy,
+			AllureBin:      cfg.Allure.Bin,
 		},
 		log,
 	)
@@ -150,6 +131,8 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 		IdleTimeout:       cfg.Server.IdleTimeout,
 	}
 	srv.RegisterOnShutdown(bus.Shutdown)
+	srv.RegisterOnShutdown(notifier.Close)
+	srv.RegisterOnShutdown(closeNotifyRepo)
 
 	return &App{log: log, db: db, srv: srv, cfg: cfg, auth: auth, provider: provider, cleanupSvc: cleanupSvc}, nil
 }
@@ -209,11 +192,17 @@ func (a *App) Run(ctx context.Context) error {
 		a.log.Info("shutdown signal received, draining connections")
 	}
 
+	// Use a fresh context for graceful shutdown; the root context is already
+	// canceled by SIGINT/SIGTERM, which would otherwise cause immediate failure.
 	sdCtx, cancel := context.WithTimeout(context.Background(), a.cfg.Server.ShutdownTimeout)
 	defer cancel()
 
 	if err := a.srv.Shutdown(sdCtx); err != nil {
-		a.log.Error("forced shutdown", zap.Error(err))
+		if errors.Is(err, context.DeadlineExceeded) {
+			a.log.Warn("graceful shutdown timed out", zap.Duration("timeout", a.cfg.Server.ShutdownTimeout))
+		} else {
+			a.log.Error("forced shutdown", zap.Error(err))
+		}
 	}
 	_ = a.db.Close()
 	a.log.Info("server stopped")

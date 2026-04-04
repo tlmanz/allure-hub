@@ -274,9 +274,9 @@ function APIKeysSection() {
   const hasMore = keys.length < total
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8 h-full">
       {/* Role reference */}
-      <section>
+      <section className="shrink-0">
         <div className="flex items-center gap-2 mb-3">
           <span className="material-symbols-outlined text-[18px] text-on-surface-variant">shield</span>
           <h3 className="text-sm font-headline font-bold text-on-surface">Role Permissions</h3>
@@ -299,7 +299,7 @@ function APIKeysSection() {
       </section>
 
       {/* Generate card */}
-      <section>
+      <section className="shrink-0">
         <div className="flex items-center gap-2 mb-3">
           <span className="material-symbols-outlined text-[18px] text-primary">add_circle</span>
           <h3 className="text-sm font-headline font-bold text-on-surface">Generate New Key</h3>
@@ -313,8 +313,8 @@ function APIKeysSection() {
       </section>
 
       {/* Manage keys card */}
-      <section>
-        <div className="flex items-center justify-between gap-4 mb-3">
+      <section className="flex flex-col min-h-0 flex-1">
+        <div className="flex items-center justify-between gap-4 mb-3 shrink-0">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px] text-on-surface-variant">vpn_key</span>
             <h3 className="text-sm font-headline font-bold text-on-surface">
@@ -326,12 +326,13 @@ function APIKeysSection() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 mb-3 border border-error/15">
+          <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-2.5 mb-3 border border-error/15 shrink-0">
             <span className="material-symbols-outlined text-[14px]">error</span>
             {error}
           </div>
         )}
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-14 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
             <span className="text-on-surface-variant text-sm animate-pulse">Loading keys…</span>
@@ -413,6 +414,7 @@ function APIKeysSection() {
             )}
           </div>
         )}
+        </div>
       </section>
 
       {plaintext && <PlaintextModal plaintext={plaintext} onClose={() => setPlaintext(null)} />}
@@ -895,26 +897,367 @@ function DataRetentionSection() {
   )
 }
 
+// ── Allure Version section ────────────────────────────────────────────────────
+
+function AllureVersionSection() {
+  const { user: me } = useAuth()
+  const isAdmin = me?.role === 'admin'
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [inputVersion, setInputVersion] = useState('')
+  const [updating, setUpdating] = useState(false)
+  const { show: showAlert, SnackbarNode } = useSnackbar()
+
+  const updateAvailable = !!(latestVersion && currentVersion && latestVersion !== currentVersion)
+
+  useEffect(() => {
+    api.getAllureVersion()
+      .then(d => { setCurrentVersion(d.version); setLatestVersion(d.latest || null) })
+      .catch(() => setCurrentVersion(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleUpdate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!inputVersion.trim()) return
+    setUpdating(true)
+    try {
+      const result = await api.updateAllureVersion(inputVersion.trim())
+      setCurrentVersion(result.version)
+      setInputVersion('')
+      showAlert(`Allure updated to ${result.version}`)
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to update Allure version', 'error')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  async function handleInstallLatest() {
+    if (!latestVersion) return
+    setUpdating(true)
+    try {
+      const result = await api.updateAllureVersion(latestVersion)
+      setCurrentVersion(result.version)
+      showAlert(`Allure updated to ${result.version}`)
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to update Allure version', 'error')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Update available banner */}
+      {updateAvailable && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-5 py-4 flex items-start gap-4">
+          <span className="material-symbols-outlined text-[22px] text-amber-500 mt-0.5 shrink-0">new_releases</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-headline font-semibold text-amber-600 dark:text-amber-400">
+              Update available — {latestVersion}
+            </p>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              Installed: <span className="font-mono">{currentVersion}</span>
+              {' · '}Latest: <span className="font-mono">{latestVersion}</span>
+            </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={handleInstallLatest}
+              disabled={updating}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[14px]">{updating ? 'hourglass_empty' : 'download'}</span>
+              {updating ? 'Installing…' : `Install ${latestVersion}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Current version */}
+      <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 overflow-hidden divide-y divide-outline-variant/10">
+        <div className="px-5 py-4 flex items-center justify-between gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant">system_update</span>
+              <p className="text-sm font-headline font-semibold text-on-surface">Installed Version</p>
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              The Allure CLI version currently used to generate reports.
+            </p>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            {loading ? (
+              <span className="text-sm font-mono text-on-surface-variant animate-pulse">checking…</span>
+            ) : currentVersion ? (
+              <span className="text-sm font-mono font-semibold text-on-surface bg-surface-container-high px-3 py-1 rounded-lg border border-outline-variant/20">
+                {currentVersion}
+              </span>
+            ) : (
+              <span className="text-sm text-error">unavailable</span>
+            )}
+            {latestVersion && !updateAvailable && !loading && (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-label font-semibold">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Up to date
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Update form — admin only */}
+      {isAdmin ? (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-[18px] text-primary">upgrade</span>
+            <h3 className="text-sm font-headline font-bold text-on-surface">Install a Different Version</h3>
+          </div>
+          <div className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10">
+            <p className="text-xs text-on-surface-variant mb-4">
+              Enter a semver version (e.g. <code className="font-mono bg-surface-container-high px-1 rounded">3.4.0</code>) to install from npm.
+              The server will run <code className="font-mono bg-surface-container-high px-1 rounded">npm install -g allure@&lt;version&gt;</code>.
+              New report generations will use the updated binary immediately.
+            </p>
+            <form onSubmit={handleUpdate} className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-[160px]">
+                <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">
+                  Version
+                </label>
+                <input
+                  type="text"
+                  value={inputVersion}
+                  onChange={e => setInputVersion(e.target.value)}
+                  placeholder="e.g. 3.4.0"
+                  pattern="\d+\.\d+\.\d+"
+                  required
+                  className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={updating || !inputVersion.trim()}
+                className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">{updating ? 'hourglass_empty' : 'download'}</span>
+                {updating ? 'Installing…' : 'Install'}
+              </button>
+            </form>
+          </div>
+        </section>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/10 text-xs text-on-surface-variant">
+          <span className="material-symbols-outlined text-[16px]">lock</span>
+          Only admins can install a different Allure version.
+        </div>
+      )}
+
+      {SnackbarNode}
+    </div>
+  )
+}
+
+// ── Disk Usage section ────────────────────────────────────────────────────────
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function usageColor(pct: number) {
+  if (pct >= 85) return { bar: 'bg-error', text: 'text-error' }
+  if (pct >= 70) return { bar: 'bg-amber-500', text: 'text-amber-500' }
+  return { bar: 'bg-emerald-500', text: 'text-emerald-500' }
+}
+
+function DiskUsageSection() {
+  const [data, setData] = useState<import('../types').DiskUsage | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [notificationThreshold, setNotificationThreshold] = useState(85)
+  const [thresholdLoading, setThresholdLoading] = useState(true)
+  const [thresholdSaving, setThresholdSaving] = useState(false)
+  const { show: showAlert, SnackbarNode } = useSnackbar()
+
+  useEffect(() => {
+    api.getDiskUsage()
+      .then(setData)
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load disk usage'))
+      .finally(() => setLoading(false))
+    api.getDiskNotificationThreshold()
+      .then(d => setNotificationThreshold(d.thresholdPercent))
+      .catch(() => {})
+      .finally(() => setThresholdLoading(false))
+  }, [])
+
+  async function saveNotificationThreshold() {
+    setThresholdSaving(true)
+    try {
+      await api.setDiskNotificationThreshold(notificationThreshold)
+      showAlert('Disk notification threshold saved')
+    } catch (e) {
+      showAlert(e instanceof Error ? e.message : 'Failed to save disk notification threshold', 'error')
+    } finally {
+      setThresholdSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-14 bg-surface-container-low/40 rounded-2xl border border-outline-variant/10">
+        <span className="text-on-surface-variant text-sm animate-pulse">Loading disk usage…</span>
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-error bg-error/8 rounded-xl px-4 py-3 border border-error/15">
+        <span className="material-symbols-outlined text-[14px]">error</span>
+        {error ?? 'No data'}
+      </div>
+    )
+  }
+
+  const usedPct = data.totalBytes > 0 ? Math.round((data.usedBytes / data.totalBytes) * 100) : 0
+  const colors = usageColor(usedPct)
+
+  return (
+    <div className="space-y-6">
+      {/* Notification level */}
+      <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 p-5">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-sm font-headline font-semibold text-on-surface">Disk Usage Notification Threshold</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              Send disk usage notifications when used storage reaches this percentage.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={notificationThreshold}
+              onChange={e => setNotificationThreshold(Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)))}
+              disabled={thresholdLoading || thresholdSaving}
+              className="w-24 bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface text-center outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-60"
+            />
+            <span className="text-sm text-on-surface-variant">%</span>
+            <button
+              onClick={saveNotificationThreshold}
+              disabled={thresholdLoading || thresholdSaving}
+              className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[16px]">{thresholdSaving ? 'hourglass_empty' : 'save'}</span>
+              {thresholdSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Usage bar */}
+      <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 p-5 space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-headline font-semibold text-on-surface">Storage Used</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">Data directory — reports, results, and uploads</p>
+          </div>
+          <span className={`text-2xl font-headline font-bold tabular-nums ${colors.text}`}>
+            {data.totalBytes > 0 ? `${usedPct}%` : '—'}
+          </span>
+        </div>
+
+        {/* Bar */}
+        <div className="h-2.5 rounded-full bg-surface-container-high overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${colors.bar}`}
+            style={{ width: `${Math.min(usedPct, 100)}%` }}
+          />
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-3 pt-1">
+          {[
+            { label: 'Used',  value: formatBytes(data.usedBytes),  color: colors.text },
+            { label: 'Free',  value: formatBytes(data.freeBytes),  color: 'text-on-surface' },
+            { label: 'Total', value: formatBytes(data.totalBytes), color: 'text-on-surface' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-surface-container rounded-xl px-4 py-3 border border-outline-variant/10">
+              <p className="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1">{label}</p>
+              <p className={`text-sm font-headline font-bold tabular-nums ${color}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Per-project breakdown */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">folder_open</span>
+          <h3 className="text-sm font-headline font-bold text-on-surface">By Project</h3>
+          <span className="text-xs text-on-surface-variant/60 font-label">top {data.breakdown.length}</span>
+        </div>
+
+        {data.breakdown.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 bg-surface-container-low/30 rounded-2xl border border-dashed border-outline-variant/20">
+            <span className="material-symbols-outlined text-[36px] text-on-surface-variant/20 mb-2">folder_off</span>
+            <p className="text-sm font-headline font-bold text-on-surface">No project data yet</p>
+          </div>
+        ) : (
+          <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 overflow-hidden divide-y divide-outline-variant/10">
+            {data.breakdown.map(entry => {
+              const pct = data.usedBytes > 0 ? (entry.bytes / data.usedBytes) * 100 : 0
+              return (
+                <div key={entry.path} className="flex items-center gap-4 px-5 py-3">
+                  <span className="material-symbols-outlined text-[16px] text-on-surface-variant shrink-0">folder</span>
+                  <span className="flex-1 min-w-0 text-xs font-mono text-on-surface truncate">{entry.path}</span>
+                  {/* Mini bar */}
+                  <div className="hidden sm:block w-24 h-1.5 rounded-full bg-surface-container-high overflow-hidden shrink-0">
+                    <div className="h-full rounded-full bg-primary/60" style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                  <span className="text-xs font-mono text-on-surface-variant shrink-0 w-16 text-right tabular-nums">
+                    {formatBytes(entry.bytes)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+      {SnackbarNode}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'apikeys' | 'users' | 'retention'
+type Tab = 'apikeys' | 'users' | 'retention' | 'allure' | 'disk'
 
 const NAV_ITEMS: { key: Tab; label: string; description: string; icon: string }[] = [
-  { key: 'apikeys',   label: 'API Keys',      description: 'CI/CD integration tokens',    icon: 'key' },
-  { key: 'users',     label: 'Users',         description: 'OAuth users & role management', icon: 'group' },
-  { key: 'retention', label: 'Data Retention', description: 'Automatic cleanup policy',    icon: 'auto_delete' },
+  { key: 'apikeys',   label: 'API Keys',      description: 'CI/CD integration tokens',            icon: 'key' },
+  { key: 'users',     label: 'Users',         description: 'OAuth users & role management',        icon: 'group' },
+  { key: 'retention', label: 'Data Retention', description: 'Automatic cleanup policy',            icon: 'auto_delete' },
+  { key: 'allure',    label: 'Allure CLI',    description: 'Manage the report generator version',  icon: 'science' },
+  { key: 'disk',      label: 'Disk Usage',    description: 'Storage consumed by reports & results', icon: 'database' },
 ]
 
 const SECTION_META: Record<Tab, { title: string; description: string }> = {
   apikeys:   { title: 'API Keys',       description: 'Create and manage keys used by CI/CD pipelines and external integrations.' },
   users:     { title: 'Users',          description: 'All users who have logged in via OAuth. Admins can override their roles.' },
   retention: { title: 'Data Retention', description: 'Configure how long reports are kept and how often expired data is cleaned up.' },
+  allure:    { title: 'Allure CLI',     description: 'View and update the Allure report generator version installed on the server.' },
+  disk:      { title: 'Disk Usage',     description: 'Storage consumed by the data directory, broken down by project.' },
 }
 
 export default function SettingsPage() {
   const [params, setParams] = useSearchParams()
   const raw = params.get('tab')
-  const activeTab: Tab = raw === 'users' ? 'users' : raw === 'retention' ? 'retention' : 'apikeys'
+  const activeTab: Tab = raw === 'users' ? 'users' : raw === 'retention' ? 'retention' : raw === 'allure' ? 'allure' : raw === 'disk' ? 'disk' : 'apikeys'
   const setActiveTab = (tab: Tab) => setParams({ tab })
   const { title, description } = SECTION_META[activeTab]
 
@@ -950,15 +1293,24 @@ export default function SettingsPage() {
       </aside>
 
       {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="mb-6">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
+        <div className="mb-6 shrink-0">
           <h3 className="text-2xl font-bold font-headline tracking-tight text-on-surface">{title}</h3>
           <p className="text-sm text-on-surface-variant mt-1">{description}</p>
         </div>
 
-        {activeTab === 'apikeys'   && <APIKeysSection />}
-        {activeTab === 'users'     && <UsersSection />}
-        {activeTab === 'retention' && <DataRetentionSection />}
+        {activeTab === 'apikeys' ? (
+          <div className="flex-1 min-h-0">
+            <APIKeysSection />
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {activeTab === 'users'     && <UsersSection />}
+            {activeTab === 'retention' && <DataRetentionSection />}
+            {activeTab === 'allure'    && <AllureVersionSection />}
+            {activeTab === 'disk'      && <DiskUsageSection />}
+          </div>
+        )}
       </div>
     </div>
   )

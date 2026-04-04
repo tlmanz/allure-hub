@@ -12,3 +12,4 @@ backend/policy.yaml
 .venv
 site/
 jenkins
+.codex

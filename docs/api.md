@@ -220,6 +220,117 @@ data: {"id":"01HXY...","phase":"uploading","receivedChunks":1,"totalChunks":3,..
 
 Phases: `uploading` → `assembling` → `generating` → `done` / `failed`
 
+## Notifications
+
+Notification APIs are provided by `go-notify` and mounted at `/api/notifications/*`.
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/notifications` | `view` | List notifications (newest first) |
+| `GET` | `/api/notifications/stream` | `view` | SSE stream (`event: notification`) |
+| `GET` | `/api/notifications/unread` | `view` | Unread count |
+| `PATCH` | `/api/notifications/{id}/read` | `view` | Mark one notification as read |
+| `POST` | `/api/notifications/read` | `view` | Mark all notifications as read |
+| `DELETE` | `/api/notifications/{id}` | `view` | Delete one notification |
+
+### List notifications
+
+```
+GET /api/notifications?unread=true&limit=50
+```
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|---|---|---|
+| `unread` | No | `true` to return unread-only notifications |
+| `limit` | No | Max number of notifications to return (`0` means no cap) |
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": "0195f3a2-...",
+    "title": "Report ready",
+    "body": "Your export has finished.",
+    "category": "upload",
+    "severity": "success",
+    "read": false,
+    "created_at": "2026-04-04T10:30:00Z",
+    "payload": { "url": "/reports/build1/index.html" }
+  }
+]
+```
+
+### Unread count
+
+```
+GET /api/notifications/unread
+```
+
+**Response (200):**
+
+```json
+{ "count": 3 }
+```
+
+### Read-state endpoints
+
+```
+PATCH /api/notifications/{id}/read   -> 204 No Content
+POST  /api/notifications/read        -> 204 No Content
+```
+
+`PATCH /{id}/read` returns `404` when the notification ID does not exist.
+
+### Streaming
+
+SSE endpoint: `GET /api/notifications/stream`
+
+SSE payload format:
+
+```
+event: notification
+data: {"id":"...","title":"Report ready","severity":"success",...}
+```
+
+## Overview
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/overview` | `view` | Dashboard analytics summary, trends, top failing projects, and recent builds |
+
+**Response (200):**
+
+```json
+{
+  "summary": {
+    "totalEnvironments": 3,
+    "totalProjects": 18,
+    "totalBuilds": 1240,
+    "totalPassed": 98210,
+    "totalFailed": 4170,
+    "overallPassRate": 95
+  },
+  "dailyTrends": [
+    { "date": "2026-04-01", "passed": 1200, "failed": 42, "skipped": 15, "buildCount": 14 }
+  ],
+  "topFailingProjects": [
+    {
+      "envId": "staging",
+      "projectId": "checkout",
+      "projectName": "Checkout Service",
+      "envName": "Staging",
+      "totalFailed": 310,
+      "totalBuilds": 80,
+      "passRate": 88
+    }
+  ],
+  "recentBuilds": []
+}
+```
+
 ## Health
 
 | Method | Path | Auth | Description |
@@ -301,6 +412,132 @@ DELETE /api/settings/apikeys/{id}?action=delete
 Returns users ordered by most recent login. Each entry includes `email`, `name`, `avatarUrl`, `provider`, `role`, `firstLoginAt`, and `lastLoginAt`.
 
 Role changes take effect on the user's **next login**.
+
+### Disk Usage
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/settings/disk` | `manage` | Storage consumed by the data directory |
+| `GET` | `/api/settings/disk/notification-threshold` | `manage` | Get disk-usage alert threshold percentage |
+| `PUT` | `/api/settings/disk/notification-threshold` | `manage` | Update disk-usage alert threshold percentage |
+
+```
+GET /api/settings/disk
+```
+
+Results are cached for 60 seconds on the server to keep the endpoint fast.
+
+**Response (200):**
+
+```json
+{
+  "usedBytes": 2147483648,
+  "freeBytes": 53687091200,
+  "totalBytes": 107374182400,
+  "breakdown": [
+    { "path": "production/checkout", "bytes": 1073741824 },
+    { "path": "staging/checkout",    "bytes": 536870912  }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `usedBytes` | Total bytes consumed by all files under `DATA_DIR` |
+| `freeBytes` | Available bytes on the filesystem (`Bavail × Bsize`). `0` if the stat call fails. |
+| `totalBytes` | Total filesystem capacity. `0` if the stat call fails. |
+| `breakdown` | Up to 20 env/project pairs sorted by size descending |
+
+#### Disk notification threshold
+
+```
+GET /api/settings/disk/notification-threshold
+```
+
+**Response (200):**
+
+```json
+{ "thresholdPercent": 85 }
+```
+
+`85` is the default when no value has been saved yet.
+
+```
+PUT /api/settings/disk/notification-threshold
+```
+
+**Body (JSON):**
+
+```json
+{ "thresholdPercent": 90 }
+```
+
+| Status | Reason |
+|---|---|
+| `204` | Updated successfully |
+| `400` | Invalid body or `thresholdPercent` outside `0..100` |
+| `500` | Failed to persist the setting |
+
+### Allure CLI
+
+| Method | Path | Permission | Description |
+|---|---|---|---|
+| `GET` | `/api/settings/allure` | `manage` | Get installed version and latest npm release |
+| `PUT` | `/api/settings/allure` | `manage` (admin only) | Install a specific Allure CLI version |
+
+#### Get Allure version
+
+```
+GET /api/settings/allure
+```
+
+**Response (200):**
+
+```json
+{
+  "version": "3.3.1",
+  "latest": "3.4.0"
+}
+```
+
+| Field | Description |
+|---|---|
+| `version` | The Allure CLI version currently installed on the server (`allure --version`) |
+| `latest` | The latest version published to npm (`registry.npmjs.org/allure/latest`), cached for 1 hour. Empty string if the registry is unreachable. |
+
+The UI shows an **Update available** banner in **Settings → Allure CLI** when `latest` differs from `version`, and an amber dot on the Settings nav link.
+
+#### Install a version
+
+```
+PUT /api/settings/allure
+```
+
+**Permission:** `manage` session + `admin` role
+
+Runs `npm install -g allure@<version>` on the server. The updated binary is used immediately for all subsequent report generations — no restart required.
+
+**Body (JSON):**
+
+```json
+{ "version": "3.4.0" }
+```
+
+`version` must be a valid semver string (`MAJOR.MINOR.PATCH`). Pre-release tags (e.g. `3.4.0-beta.1`) are not accepted. This endpoint works for both upgrades and downgrades.
+
+**Response (200):**
+
+```json
+{ "version": "3.4.0" }
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| `400` | Missing or invalid semver version string |
+| `403` | Caller is not an admin |
+| `500` | `npm install` failed (stderr included in response body) |
 
 ### Data Retention
 

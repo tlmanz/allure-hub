@@ -100,6 +100,14 @@ type CleanupConfig struct {
 	DryRun        bool          `env:"CLEANUP_DRY_RUN"           envDefault:"false"`
 }
 
+// NotificationConfig controls go-notify transport + storage settings.
+// When RedisURL is empty, the app falls back to in-memory notification storage.
+type NotificationConfig struct {
+	RedisURL       string `env:"NOTIFY_REDIS_URL"`
+	RedisKeyPrefix string `env:"NOTIFY_REDIS_KEY_PREFIX" envDefault:"allure_hub_notify"`
+	RetentionDays  int    `env:"NOTIFY_RETENTION_DAYS" envDefault:"30"`
+}
+
 // Config is the root configuration for allure-hub, assembled from environment
 // variables. Sub-structs group related settings; env var names are unchanged.
 type Config struct {
@@ -112,6 +120,7 @@ type Config struct {
 	Log       LogConfig
 	Auth      AuthConfig
 	Cleanup   CleanupConfig
+	Notify    NotificationConfig
 }
 
 // Values is the package-level instance populated by Load().

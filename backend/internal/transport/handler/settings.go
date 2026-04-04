@@ -1,9 +1,21 @@
 package handler
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -12,26 +24,248 @@ import (
 	kit "github.com/tlmanz/authkit"
 )
 
+var semverRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+const npmAllureLatestURL = "https://registry.npmjs.org/allure/latest"
+const npmCacheTTL = time.Hour
+
 const settingsPageSize = 20
+
+const diskCacheTTL = time.Minute
+
+const (
+	diskNotificationThresholdKey     = "disk_notification_threshold_percent"
+	defaultDiskNotificationThreshold = 85
+)
 
 // SettingsHandler exposes API key management, user-tracking, and retention endpoints.
 // All routes require a valid OAuth session (no API key auth allowed here).
 type SettingsHandler struct {
-	apiKeySvc  *usecase.APIKeyService
-	userRepo   domain.TrackedUserRepository
-	provider   *kit.LayeredPolicyProvider
-	cleanupSvc *usecase.CleanupService
-	log        *zap.Logger
+	apiKeySvc    *usecase.APIKeyService
+	userRepo     domain.TrackedUserRepository
+	settingsRepo domain.SystemSettingsRepository
+	provider     *kit.LayeredPolicyProvider
+	cleanupSvc   *usecase.CleanupService
+	allureBin    string
+	dataDir      string
+	log          *zap.Logger
+
+	npmMu          sync.Mutex
+	npmLatest      string
+	npmLatestFetch time.Time
+
+	diskMu      sync.Mutex
+	diskCached  *diskUsage
+	diskCacheAt time.Time
+}
+
+type diskUsage struct {
+	UsedBytes  int64       `json:"usedBytes"`
+	FreeBytes  int64       `json:"freeBytes"`
+	TotalBytes int64       `json:"totalBytes"`
+	Breakdown  []diskEntry `json:"breakdown"`
+}
+
+type diskEntry struct {
+	Path  string `json:"path"`
+	Bytes int64  `json:"bytes"`
 }
 
 func NewSettingsHandler(
 	apiKeySvc *usecase.APIKeyService,
 	userRepo domain.TrackedUserRepository,
+	settingsRepo domain.SystemSettingsRepository,
 	provider *kit.LayeredPolicyProvider,
 	cleanupSvc *usecase.CleanupService,
+	allureBin string,
+	dataDir string,
 	log *zap.Logger,
 ) *SettingsHandler {
-	return &SettingsHandler{apiKeySvc: apiKeySvc, userRepo: userRepo, provider: provider, cleanupSvc: cleanupSvc, log: log}
+	return &SettingsHandler{
+		apiKeySvc:    apiKeySvc,
+		userRepo:     userRepo,
+		settingsRepo: settingsRepo,
+		provider:     provider,
+		cleanupSvc:   cleanupSvc,
+		allureBin:    allureBin,
+		dataDir:      dataDir,
+		log:          log,
+	}
+}
+
+// computeDiskUsage walks dataDir and returns usage stats. Results are cached
+// for diskCacheTTL to keep the endpoint fast under repeated requests.
+func (h *SettingsHandler) computeDiskUsage() *diskUsage {
+	h.diskMu.Lock()
+	defer h.diskMu.Unlock()
+
+	if h.diskCached != nil && time.Since(h.diskCacheAt) < diskCacheTTL {
+		return h.diskCached
+	}
+
+	// Sum all file sizes under dataDir.
+	var usedBytes int64
+	_ = filepath.Walk(h.dataDir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		usedBytes += info.Size()
+		return nil
+	})
+
+	// Filesystem free/total via syscall.
+	var freeBytes, totalBytes int64
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(h.dataDir, &stat); err == nil {
+		freeBytes = int64(stat.Bavail) * int64(stat.Bsize)
+		totalBytes = int64(stat.Blocks) * int64(stat.Bsize)
+	}
+
+	// Per-project breakdown (env/project, two levels deep).
+	var breakdown []diskEntry
+	envDirs, _ := os.ReadDir(h.dataDir)
+	for _, envDir := range envDirs {
+		if !envDir.IsDir() {
+			continue
+		}
+		projDirs, _ := os.ReadDir(filepath.Join(h.dataDir, envDir.Name()))
+		for _, projDir := range projDirs {
+			if !projDir.IsDir() {
+				continue
+			}
+			projPath := filepath.Join(h.dataDir, envDir.Name(), projDir.Name())
+			var projBytes int64
+			_ = filepath.Walk(projPath, func(_ string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				projBytes += info.Size()
+				return nil
+			})
+			breakdown = append(breakdown, diskEntry{
+				Path:  envDir.Name() + "/" + projDir.Name(),
+				Bytes: projBytes,
+			})
+		}
+	}
+	sort.Slice(breakdown, func(i, j int) bool { return breakdown[i].Bytes > breakdown[j].Bytes })
+	if len(breakdown) > 20 {
+		breakdown = breakdown[:20]
+	}
+	if breakdown == nil {
+		breakdown = []diskEntry{}
+	}
+
+	h.diskCached = &diskUsage{
+		UsedBytes:  usedBytes,
+		FreeBytes:  freeBytes,
+		TotalBytes: totalBytes,
+		Breakdown:  breakdown,
+	}
+	h.diskCacheAt = time.Now()
+	return h.diskCached
+}
+
+// GetDiskUsage returns data-directory disk usage and a per-project breakdown.
+//
+//	GET /api/settings/disk
+func (h *SettingsHandler) GetDiskUsage(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, h.computeDiskUsage())
+}
+
+func normalizeDiskNotificationThreshold(raw int) (int, bool) {
+	if raw < 0 || raw > 100 {
+		return 0, false
+	}
+	return raw, true
+}
+
+// GetDiskNotificationThreshold returns the configured disk usage notification threshold percentage.
+//
+//	GET /api/settings/disk/notification-threshold
+func (h *SettingsHandler) GetDiskNotificationThreshold(w http.ResponseWriter, r *http.Request) {
+	raw, err := h.settingsRepo.Get(r.Context(), diskNotificationThresholdKey)
+	if err != nil {
+		h.log.Error("get disk notification threshold failed", zap.Error(err))
+		http.Error(w, "failed to get disk notification threshold", http.StatusInternalServerError)
+		return
+	}
+	threshold := defaultDiskNotificationThreshold
+	if raw != "" {
+		v, convErr := strconv.Atoi(raw)
+		if convErr == nil {
+			if normalized, ok := normalizeDiskNotificationThreshold(v); ok {
+				threshold = normalized
+			}
+		}
+	}
+	writeJSON(w, map[string]int{"thresholdPercent": threshold})
+}
+
+// SetDiskNotificationThreshold updates the disk usage notification threshold percentage.
+//
+//	PUT /api/settings/disk/notification-threshold
+func (h *SettingsHandler) SetDiskNotificationThreshold(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ThresholdPercent int `json:"thresholdPercent"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBytes)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	threshold, ok := normalizeDiskNotificationThreshold(req.ThresholdPercent)
+	if !ok {
+		http.Error(w, "thresholdPercent must be between 0 and 100", http.StatusBadRequest)
+		return
+	}
+	if err := h.settingsRepo.Set(r.Context(), diskNotificationThresholdKey, strconv.Itoa(threshold)); err != nil {
+		h.log.Error("set disk notification threshold failed", zap.Int("thresholdPercent", threshold), zap.Error(err))
+		http.Error(w, "failed to set disk notification threshold", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// fetchNPMLatest returns the latest published version of the allure npm package,
+// caching the result for npmCacheTTL to avoid hitting the registry on every request.
+// Returns an empty string on any error so the caller degrades gracefully.
+func (h *SettingsHandler) fetchNPMLatest(ctx context.Context) string {
+	h.npmMu.Lock()
+	defer h.npmMu.Unlock()
+
+	if h.npmLatest != "" && time.Since(h.npmLatestFetch) < npmCacheTTL {
+		return h.npmLatest
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, npmAllureLatestURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return ""
+	}
+	defer resp.Body.Close()
+
+	var payload struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&payload); err != nil || payload.Version == "" {
+		return ""
+	}
+
+	h.npmLatest = payload.Version
+	h.npmLatestFetch = time.Now()
+	return h.npmLatest
 }
 
 // ListAPIKeys returns a page of API keys matching an optional search query.
@@ -267,4 +501,72 @@ func (h *SettingsHandler) ResetUserRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetAllureVersion returns the currently installed Allure CLI version and the
+// latest version published to npm (cached for 1 h). The "latest" field is an
+// empty string if the registry is unreachable.
+//
+//	GET /api/settings/allure
+func (h *SettingsHandler) GetAllureVersion(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, h.allureBin, "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		h.log.Error("allure --version failed", zap.Error(err))
+		http.Error(w, "failed to get allure version", http.StatusInternalServerError)
+		return
+	}
+
+	latest := h.fetchNPMLatest(r.Context())
+	writeJSON(w, map[string]string{
+		"version": strings.TrimSpace(string(out)),
+		"latest":  latest,
+	})
+}
+
+// UpdateAllureVersion installs a specific Allure CLI version via npm.
+// Admin only. The version must be a valid semver string (e.g. "3.3.1").
+//
+//	PUT /api/settings/allure
+func (h *SettingsHandler) UpdateAllureVersion(w http.ResponseWriter, r *http.Request) {
+	caller := kit.UserFromCtx(r.Context())
+	if caller == nil || caller.Role != "admin" {
+		http.Error(w, "forbidden: admin role required", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Version string `json:"version"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBytes)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Version == "" {
+		http.Error(w, "version is required", http.StatusBadRequest)
+		return
+	}
+	if !semverRe.MatchString(req.Version) {
+		http.Error(w, "version must be a valid semver (e.g. 3.3.1)", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "npm", "install", "-g", "allure@"+req.Version)
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		h.log.Error("npm install allure failed",
+			zap.String("version", req.Version),
+			zap.String("stderr", stderr.String()),
+			zap.Error(err),
+		)
+		http.Error(w, "failed to install allure "+req.Version+": "+strings.TrimSpace(stderr.String()), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("allure version updated", zap.String("version", req.Version))
+	writeJSON(w, map[string]string{"version": req.Version})
 }

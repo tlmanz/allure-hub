@@ -103,17 +103,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 		return nil, fmt.Errorf("repository: batch count builds: %w", err)
 	}
 	defer countRows.Close()
-	for countRows.Next() {
-		var pid string
-		var cnt int
-		if err := countRows.Scan(&pid, &cnt); err != nil {
-			return nil, err
-		}
-		if s, ok := result[pid]; ok {
-			s.Count = cnt
-		}
-	}
-	if err := countRows.Err(); err != nil {
+	if err := scanBatchCountRows(countRows, result); err != nil {
 		return nil, err
 	}
 
@@ -134,12 +124,33 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 		return nil, fmt.Errorf("repository: batch latest builds: %w", err)
 	}
 	defer latestRows.Close()
-	for latestRows.Next() {
+	if err := scanBatchLatestRows(latestRows, result); err != nil {
+		return nil, err
+	}
+	return result, latestRows.Err()
+}
+
+func scanBatchCountRows(rows *sql.Rows, result map[string]*domain.ProjectBatchStats) error {
+	for rows.Next() {
+		var pid string
+		var cnt int
+		if err := rows.Scan(&pid, &cnt); err != nil {
+			return err
+		}
+		if s, ok := result[pid]; ok {
+			s.Count = cnt
+		}
+	}
+	return rows.Err()
+}
+
+func scanBatchLatestRows(rows *sql.Rows, result map[string]*domain.ProjectBatchStats) error {
+	for rows.Next() {
 		var b domain.Build
 		var createdAt, configJSON, warningsJSON string
-		if err := latestRows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt,
+		if err := rows.Scan(&b.ID, &b.EnvID, &b.ProjectID, &b.BuildID, &createdAt,
 			&b.ReportURL, &b.Passed, &b.Failed, &b.Skipped, &b.Total, &b.Status, &b.UploadedBy, &configJSON, &warningsJSON); err != nil {
-			return nil, err
+			return err
 		}
 		if t, err := parseTimestamp(createdAt); err == nil {
 			b.CreatedAt = t
@@ -155,7 +166,7 @@ func (r *BuildRepo) BatchStatsByProject(ctx context.Context, envID string, proje
 			s.Latest = &bCopy
 		}
 	}
-	return result, latestRows.Err()
+	return rows.Err()
 }
 
 func (r *BuildRepo) CountByProject(ctx context.Context, envID, projectID string) (int, error) {

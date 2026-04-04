@@ -126,6 +126,22 @@ The cleanup worker runs as a background goroutine and periodically deletes repor
 
 The outcome of each sweep is recorded. The last **5 runs** are visible in **Settings → Data Retention → Recent Cleanup Runs**, including status (`success`/`failed`), number of builds deleted, skipped count, duration, and the error message if the sweep failed.
 
+## Notifications
+
+Allure Hub uses [`go-notify`](https://github.com/tlmanz/go-notify) for in-app notifications (SSE/WebSocket stream + repository-backed storage).
+
+| Variable | Default | Description |
+|---|---|---|
+| `NOTIFY_REDIS_URL` | `` | Redis URL for persistent/shared notification storage. Leave empty to use in-memory storage. |
+| `NOTIFY_REDIS_KEY_PREFIX` | `allure_hub_notify` | Redis key prefix for notification keys. |
+| `NOTIFY_RETENTION_DAYS` | `30` | Notification retention window in days. `0` disables pruning. |
+
+!!! info "Storage backend behavior"
+    If `NOTIFY_REDIS_URL` is set, notifications are stored in Redis via the official `go-notify/redis` adapter. If it is unset, Allure Hub falls back to in-memory storage (good for local/dev, not durable across restarts).
+
+!!! info "Logging"
+    `go-notify` internal events are forwarded through the app's configured logger (`LOG_LEVEL`, `LOG_FORMAT`, `LOG_OUTPUT`) with `component=go-notify`.
+
 ## Rate limiting
 
 | Variable | Default | Description |

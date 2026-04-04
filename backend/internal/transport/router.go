@@ -3,24 +3,22 @@ package transport
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/tlmanz/allure-hub/internal/domain"
 	"github.com/tlmanz/allure-hub/internal/transport/handler"
 	"github.com/tlmanz/allure-hub/internal/transport/middleware"
+	"github.com/tlmanz/allure-hub/internal/transport/routes"
 	"github.com/tlmanz/allure-hub/internal/usecase"
 	localauth "github.com/tlmanz/allure-hub/pkg/authkit"
 	kit "github.com/tlmanz/authkit"
+	notify "github.com/tlmanz/go-notify"
 )
 
-// DB is the minimal interface NewRouter needs for health checks.
-type DB interface{ Ping() error }
+// Pinger is the minimal interface NewRouter needs for health checks.
+type Pinger interface{ Ping() error }
 
 // RouterConfig groups the tuneable parameters for the HTTP handler tree.
 type RouterConfig struct {
@@ -32,90 +30,52 @@ type RouterConfig struct {
 	RateLimitRate  float64
 	RateLimitBurst float64
 	TrustProxy     bool
+	AllureBin      string
+}
+
+// OverviewRepository is the minimal interface NewRouter needs for the overview handler.
+type OverviewRepository interface {
+	GetStats(ctx context.Context) (*domain.OverviewStats, error)
 }
 
 // NewRouter builds and returns the HTTP handler tree.
 func NewRouter(
-	db DB,
+	db Pinger,
 	envSvc *usecase.EnvironmentService,
 	projectSvc *usecase.ProjectService,
 	reportSvc *usecase.ReportService,
 	uploadSvc *usecase.UploadService,
 	sessionRepo domain.UploadSessionRepository,
 	bus *usecase.EventBus,
+	notifier *notify.Notifier,
 	auth *kit.Auth,
 	provider *kit.LayeredPolicyProvider,
 	apiKeySvc *usecase.APIKeyService,
 	userRepo domain.TrackedUserRepository,
+	settingsRepo domain.SystemSettingsRepository,
 	cleanupSvc *usecase.CleanupService,
+	overviewRepo OverviewRepository,
 	rcfg RouterConfig,
 	log *zap.Logger,
 ) http.Handler {
 	mux := http.NewServeMux()
 
-	eh := handler.NewEnvironmentHandler(envSvc, log)
-	ph := handler.NewProjectHandler(projectSvc, log)
-	rh := handler.NewReportHandler(reportSvc, uploadSvc, rcfg.MaxChunkBytes, rcfg.MaxUploadBytes, log)
-	uh := handler.NewUploadSessionHandler(sessionRepo, uploadSvc, bus, log)
-	hh := handler.NewHealthHandler(db)
-	sh := handler.NewSettingsHandler(apiKeySvc, userRepo, provider, cleanupSvc, log)
+	environmentHandler := handler.NewEnvironmentHandler(envSvc, log)
+	projectHandler := handler.NewProjectHandler(projectSvc, log)
+	reportHandler := handler.NewReportHandler(reportSvc, uploadSvc, rcfg.MaxChunkBytes, rcfg.MaxUploadBytes, log)
+	uploadHandler := handler.NewUploadSessionHandler(sessionRepo, uploadSvc, bus, log)
+	healthHandler := handler.NewHealthHandler(db)
+	settingsHandler := handler.NewSettingsHandler(apiKeySvc, userRepo, settingsRepo, provider, cleanupSvc, rcfg.AllureBin, rcfg.DataDir, log)
+	overviewHandler := handler.NewOverviewHandler(overviewRepo, log)
 
-	// Auth routes — OAuth flow (no API key auth here)
-	mux.HandleFunc("GET /auth/{provider}", auth.BeginAuth)
-	mux.HandleFunc("GET /auth/{provider}/callback", auth.Callback)
-	mux.HandleFunc("POST /auth/logout", auth.Logout)
-	// /auth/me: session-only, track the user on access
-	mux.Handle("GET /auth/me", auth.RequireSessionAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u := kit.UserFromCtx(r.Context())
-		go upsertTrackedUser(context.Background(), userRepo, u)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(u)
-	})))
-
-	// Environments
-	// GET  — API keys allowed (read-only dashboards, CI status checks)
-	// POST/PATCH/DELETE — session-only management
-	mux.Handle("GET /api/environments", auth.Require(localauth.PermView)(http.HandlerFunc(eh.List)))
-	mux.Handle("POST /api/environments", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Create)))
-	mux.Handle("PATCH /api/environments/{envId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Update)))
-	mux.Handle("DELETE /api/environments/{envId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(eh.Delete)))
-
-	// Projects
-	mux.Handle("GET /api/environments/{envId}/projects", auth.Require(localauth.PermView)(http.HandlerFunc(ph.List)))
-	mux.Handle("POST /api/environments/{envId}/projects", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(ph.Create)))
-	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(ph.Delete)))
-
-	// Results upload — API keys allowed (primary CI/CD path)
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/results", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadResultsStream)))
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.InitChunkedUpload)))
-	mux.Handle("PUT /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.UploadChunk)))
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/uploads/{uploadId}/complete", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.CompleteChunkedUpload)))
-
-	// Report generation + listing
-	mux.Handle("POST /api/environments/{envId}/projects/{projectId}/reports", auth.Require(localauth.PermUpload)(http.HandlerFunc(rh.GenerateReport)))
-	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports", auth.Require(localauth.PermView)(http.HandlerFunc(rh.ListReports)))
-	mux.Handle("GET /api/environments/{envId}/projects/{projectId}/reports/stats", auth.Require(localauth.PermView)(http.HandlerFunc(rh.ReportStats)))
-	mux.Handle("DELETE /api/environments/{envId}/projects/{projectId}/reports/{buildId}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(rh.DeleteReport)))
-
-	// Upload session tracking
-	mux.Handle("GET /api/uploads", auth.Require(localauth.PermView)(http.HandlerFunc(uh.List)))
-	mux.Handle("GET /api/uploads/stream", auth.Require(localauth.PermView)(http.HandlerFunc(uh.Stream)))
-	mux.Handle("DELETE /api/uploads/{id}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(uh.Delete)))
-
-	// Settings — session-only (API keys must not manage themselves)
-	mux.Handle("GET /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListAPIKeys)))
-	mux.Handle("POST /api/settings/apikeys", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.CreateAPIKey)))
-	mux.Handle("DELETE /api/settings/apikeys/{id}", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.RevokeAPIKey)))
-	mux.Handle("GET /api/settings/users", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ListUsers)))
-	mux.Handle("PATCH /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetUserRole)))
-	mux.Handle("DELETE /api/settings/users/{email}/role", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.ResetUserRole)))
-	mux.Handle("GET /api/settings/retention", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetRetention)))
-	mux.Handle("PUT /api/settings/retention", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetRetention)))
-	mux.Handle("GET /api/settings/retention/runs", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetCleanupRuns)))
-
-	// Health + version (unprotected)
-	mux.HandleFunc("GET /api/healthz", hh.Check)
-	mux.HandleFunc("GET /api/version", hh.Info)
+	routes.RegisterAuthRoutes(mux, auth, userRepo)
+	routes.RegisterEnvironmentRoutes(mux, auth, environmentHandler, projectHandler)
+	routes.RegisterReportRoutes(mux, auth, reportHandler, uploadHandler)
+	routes.RegisterSettingsRoutes(mux, auth, settingsHandler)
+	routes.RegisterSystemRoutes(mux, auth, overviewHandler, healthHandler)
+	if notifier != nil {
+		mux.Handle("/api/notifications/", auth.Require(localauth.PermView)(notifier.Handler("/api/notifications")))
+	}
 
 	// Serve generated Allure reports — requires PermView (session or API key).
 	mux.Handle("/reports/", auth.Require(localauth.PermView)(reportsHandler(rcfg.DataDir)))
@@ -130,78 +90,4 @@ func NewRouter(
 			),
 		),
 	)
-}
-
-// upsertTrackedUser persists an OAuth user's login record asynchronously.
-func upsertTrackedUser(ctx context.Context, repo domain.TrackedUserRepository, u *kit.User) {
-	if repo == nil || u == nil {
-		return
-	}
-	now := time.Now().UTC()
-	_ = repo.Upsert(ctx, &domain.TrackedUser{
-		Email:        u.Email,
-		Name:         u.Name,
-		AvatarURL:    u.AvatarURL,
-		Provider:     u.Provider,
-		Role:         u.Role,
-		FirstLoginAt: now,
-		LastLoginAt:  now,
-	})
-}
-
-func reportsHandler(dataDir string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := strings.TrimPrefix(r.URL.Path, "/reports/")
-		parts := strings.SplitN(p, "/", 3)
-		if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-			http.NotFound(w, r)
-			return
-		}
-		envID := parts[0]
-		projectID := parts[1]
-		rest := parts[2]
-
-		target := filepath.Join(dataDir, envID, projectID, "reports", rest)
-		absTarget, err := filepath.Abs(target)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		absBase, err := filepath.Abs(filepath.Join(dataDir, envID, projectID, "reports"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) && absTarget != absBase {
-			http.NotFound(w, r)
-			return
-		}
-
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("Content-Security-Policy",
-			"default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https:; "+
-				"img-src 'self' data: blob: https:; "+
-				"font-src 'self' data: https:; "+
-				"connect-src 'self' data: blob: https:; "+
-				"worker-src blob: 'self'; "+
-				"frame-ancestors 'self';",
-		)
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		http.ServeFile(w, r, absTarget)
-	})
-}
-
-func spaHandler(webDir string) http.Handler {
-	fsys := http.Dir(webDir)
-	fileServer := http.FileServer(fsys)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		f, err := fsys.Open(r.URL.Path)
-		if err != nil {
-			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-			return
-		}
-		f.Close()
-		fileServer.ServeHTTP(w, r)
-	})
 }

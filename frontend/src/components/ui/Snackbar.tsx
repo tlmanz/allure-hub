@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type SnackbarVariant = 'success' | 'error'
+export type SnackbarVariant = 'success' | 'error' | 'warning' | 'info'
 
 interface SnackbarState {
   visible: boolean
@@ -18,6 +18,16 @@ const VARIANT_STYLES: Record<SnackbarVariant, { container: string; icon: string;
     container: 'bg-error/10 border-error/25 text-error',
     icon: 'text-error',
     iconName: 'error',
+  },
+  warning: {
+    container: 'bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-400',
+    icon: 'text-amber-500',
+    iconName: 'warning',
+  },
+  info: {
+    container: 'bg-sky-500/10 border-sky-500/25 text-sky-700 dark:text-sky-400',
+    icon: 'text-sky-500',
+    iconName: 'info',
   },
 }
 
