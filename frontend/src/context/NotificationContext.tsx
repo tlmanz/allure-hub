@@ -16,6 +16,7 @@ interface NotificationContextValue {
   unseenCount: number
   markAsRead: (id: string) => void
   clearUnseen: () => void
+  deleteNotification: (id: string) => void
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null)
@@ -151,8 +152,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     })
   }, [syncFromServer, unseenCount])
 
+  const deleteNotification = useCallback((id: string) => {
+    const target = notifications.find(n => n.id === id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+    if (target && !target.read) {
+      setUnseenCount(prev => Math.max(0, prev - 1))
+    }
+    api.deleteNotification(id).catch(() => {
+      syncFromServer()
+    })
+  }, [notifications, syncFromServer])
+
   return (
-    <NotificationContext.Provider value={{ notifications, unseenCount, markAsRead, clearUnseen }}>
+    <NotificationContext.Provider value={{ notifications, unseenCount, markAsRead, clearUnseen, deleteNotification }}>
       {children}
       {SnackbarNode}
     </NotificationContext.Provider>

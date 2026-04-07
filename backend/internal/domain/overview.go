@@ -8,10 +8,13 @@ type OverviewFilter struct {
 
 // OverviewStats holds all data needed to render the analytics overview dashboard.
 type OverviewStats struct {
-	Summary            OverviewSummary      `json:"summary"`
-	DailyTrends        []DailyTrend         `json:"dailyTrends"`
-	TopFailingProjects []ProjectFailStats   `json:"topFailingProjects"`
-	RecentBuilds       []*Build             `json:"recentBuilds"`
+	Summary            OverviewSummary    `json:"summary"`
+	DailyTrends        []DailyTrend       `json:"dailyTrends"`
+	TopFailingProjects []ProjectFailStats `json:"topFailingProjects"`
+	RecentBuilds       []*Build           `json:"recentBuilds"`
+	// ProjectBuildTrend contains pass/fail/skipped per build for the last 30 builds
+	// within the current filter scope. Most meaningful when filtered to a single project.
+	ProjectBuildTrend []BuildTrend `json:"projectBuildTrend"`
 }
 
 // OverviewSummary contains system-wide aggregate counts.
@@ -42,4 +45,13 @@ type ProjectFailStats struct {
 	TotalFailed int    `json:"totalFailed"`
 	TotalBuilds int    `json:"totalBuilds"`
 	PassRate    int    `json:"passRate"`
+}
+
+// BuildTrend holds pass/fail/skipped counts for a single build, used in the per-project build trend chart.
+type BuildTrend struct {
+	BuildID   string `json:"buildId"`
+	CreatedAt string `json:"createdAt"`
+	Passed    int    `json:"passed"`
+	Failed    int    `json:"failed"`
+	Skipped   int    `json:"skipped"`
 }

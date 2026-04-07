@@ -16,8 +16,8 @@
 set -euo pipefail
 
 ALLURE_HUB_URL="${ALLURE_HUB_URL:-http://localhost:8080}"
-ENV_ID="${ENV_ID:-default}"
-ENV_NAME="${ENV_NAME:-Default}"
+ENV_ID="${ENV_ID:-qa}"
+ENV_NAME="${ENV_NAME:-Quality Assurance}"
 PROJECT_ID="${PROJECT_ID:-sample-java}"
 PROJECT_NAME="${PROJECT_NAME:-Sample Java App}"
 BUILD_ID="${BUILD_ID:-$(date +%Y%m%d-%H%M%S)}"

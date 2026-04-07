@@ -36,6 +36,8 @@ const diskCacheTTL = time.Minute
 const (
 	diskNotificationThresholdKey     = "disk_notification_threshold_percent"
 	defaultDiskNotificationThreshold = 85
+
+	autoCreateEnvProjectKey = "auto_create_env_project"
 )
 
 // SettingsHandler exposes API key management, user-tracking, and retention endpoints.
@@ -569,4 +571,48 @@ func (h *SettingsHandler) UpdateAllureVersion(w http.ResponseWriter, r *http.Req
 
 	h.log.Info("allure version updated", zap.String("version", req.Version))
 	writeJSON(w, map[string]string{"version": req.Version})
+}
+
+// GetPublishingSettings returns the current publishing settings.
+//
+//	GET /api/settings/publishing
+func (h *SettingsHandler) GetPublishingSettings(w http.ResponseWriter, r *http.Request) {
+	raw, err := h.settingsRepo.Get(r.Context(), autoCreateEnvProjectKey)
+	if err != nil {
+		h.log.Error("get publishing settings failed", zap.Error(err))
+		http.Error(w, "failed to get publishing settings", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]bool{"autoCreateEnvAndProject": raw == "true"})
+}
+
+// SetPublishingSettings updates the publishing settings. Only admins may call this.
+//
+//	PUT /api/settings/publishing
+func (h *SettingsHandler) SetPublishingSettings(w http.ResponseWriter, r *http.Request) {
+	caller := kit.UserFromCtx(r.Context())
+	if caller == nil || caller.Role != "admin" {
+		http.Error(w, "forbidden: admin role required", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		AutoCreateEnvAndProject bool `json:"autoCreateEnvAndProject"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBytes)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	val := "false"
+	if req.AutoCreateEnvAndProject {
+		val = "true"
+	}
+	if err := h.settingsRepo.Set(r.Context(), autoCreateEnvProjectKey, val); err != nil {
+		h.log.Error("set publishing settings failed", zap.Error(err))
+		http.Error(w, "failed to set publishing settings", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

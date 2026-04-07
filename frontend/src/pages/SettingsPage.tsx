@@ -1405,6 +1405,111 @@ function AllureVersionSection() {
   );
 }
 
+// ── Publishing section ────────────────────────────────────────────────────────
+
+function PublishingSection() {
+  const { user: me } = useAuth();
+  const isAdmin = me?.role === "admin";
+  const [autoCreate, setAutoCreate] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const { show: showAlert, SnackbarNode } = useSnackbar();
+
+  useEffect(() => {
+    api
+      .getPublishingSettings()
+      .then((d) => setAutoCreate(d.autoCreateEnvAndProject))
+      .catch(() => setAutoCreate(false));
+  }, []);
+
+  async function handleToggle(next: boolean) {
+    if (!isAdmin) return;
+    setSaving(true);
+    try {
+      await api.setPublishingSettings({ autoCreateEnvAndProject: next });
+      setAutoCreate(next);
+      showAlert(
+        next
+          ? { title: "Auto-create enabled", description: "Environments and projects will be created automatically on first publish." }
+          : { title: "Auto-create disabled", description: "Uploads will fail with a 404 if the environment or project doesn't exist." },
+      );
+    } catch (err) {
+      showAlert(
+        err instanceof Error
+          ? err.message
+          : "Failed to update publishing settings",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 overflow-hidden divide-y divide-outline-variant/10">
+        <div className="px-5 py-4 flex items-center justify-between gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+                create_new_folder
+              </span>
+              <p className="text-sm font-headline font-semibold text-on-surface">
+                Auto-create environment &amp; project
+              </p>
+            </div>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              When enabled, publishing results to an environment or project that
+              doesn't exist will create it automatically. When disabled, the
+              upload fails with a 404 if either is missing.
+            </p>
+          </div>
+          <div className="shrink-0">
+            {autoCreate === null ? (
+              <span className="text-sm text-on-surface-variant animate-pulse">
+                loading…
+              </span>
+            ) : isAdmin ? (
+              <button
+                onClick={() => handleToggle(!autoCreate)}
+                disabled={saving}
+                aria-pressed={autoCreate}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${
+                  autoCreate ? "bg-primary" : "bg-outline-variant"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    autoCreate ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            ) : (
+              <span
+                className={`text-xs font-label font-bold px-2.5 py-1 rounded-full ${
+                  autoCreate
+                    ? "bg-primary/10 text-primary"
+                    : "bg-surface-container text-on-surface-variant"
+                }`}
+              >
+                {autoCreate ? "Enabled" : "Disabled"}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {!isAdmin && (
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/10 text-xs text-on-surface-variant">
+          <span className="material-symbols-outlined text-[16px]">lock</span>
+          Only admins can change publishing settings.
+        </div>
+      )}
+
+      {SnackbarNode}
+    </div>
+  );
+}
+
 // ── Disk Usage section ────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -1656,7 +1761,7 @@ function DiskUsageSection() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-type Tab = "apikeys" | "users" | "retention" | "allure" | "disk";
+type Tab = "apikeys" | "users" | "retention" | "allure" | "disk" | "publishing";
 
 const NAV_ITEMS: {
   key: Tab;
@@ -1694,6 +1799,12 @@ const NAV_ITEMS: {
     description: "Storage consumed by reports & results",
     icon: "database",
   },
+  {
+    key: "publishing",
+    label: "Publishing",
+    description: "Results upload behaviour",
+    icon: "publish",
+  },
 ];
 
 const SECTION_META: Record<Tab, { title: string; description: string }> = {
@@ -1722,6 +1833,11 @@ const SECTION_META: Record<Tab, { title: string; description: string }> = {
     description:
       "Storage consumed by the data directory, broken down by project.",
   },
+  publishing: {
+    title: "Publishing",
+    description:
+      "Control how results are published when the target environment or project doesn't exist yet.",
+  },
 };
 
 export default function SettingsPage() {
@@ -1736,7 +1852,9 @@ export default function SettingsPage() {
           ? "allure"
           : raw === "disk"
             ? "disk"
-            : "apikeys";
+            : raw === "publishing"
+              ? "publishing"
+              : "apikeys";
   const setActiveTab = (tab: Tab) => setParams({ tab });
   const { title, description } = SECTION_META[activeTab];
 
@@ -1802,6 +1920,7 @@ export default function SettingsPage() {
             {activeTab === "retention" && <DataRetentionSection />}
             {activeTab === "allure" && <AllureVersionSection />}
             {activeTab === "disk" && <DiskUsageSection />}
+            {activeTab === "publishing" && <PublishingSection />}
           </div>
         )}
       </div>

@@ -40,7 +40,7 @@ const NavBar: React.FC = React.memo(() => {
   const { sessions, drawerOpen, openDrawer, closeDrawer } = useUpload();
   const health = useHealthStatus();
   const { user, logout, can } = useAuth();
-  const { notifications, unseenCount, markAsRead, clearUnseen } =
+  const { notifications, unseenCount, markAsRead, clearUnseen, deleteNotification } =
     useNotification();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
@@ -304,10 +304,7 @@ const NavBar: React.FC = React.memo(() => {
                 </div>
               ) : (
                 <ul
-                  className="max-h-72 overflow-y-auto divide-y"
-                  style={{
-                    borderColor: "rgb(var(--color-outline-variant) / 0.15)",
-                  }}
+                  className="max-h-72 overflow-y-auto"
                 >
                   {notifications.map((n) => (
                     <li
@@ -354,16 +351,26 @@ const NavBar: React.FC = React.memo(() => {
                           )}
                         </p>
                       </div>
-                      {!n.read && (
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        {!n.read && (
+                          <button
+                            type="button"
+                            onClick={() => markAsRead(n.id)}
+                            className="text-[10px] font-bold font-label uppercase tracking-wide text-primary hover:underline"
+                            title="Mark as read"
+                          >
+                            Mark read
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => markAsRead(n.id)}
-                          className="shrink-0 text-[10px] font-bold font-label uppercase tracking-wide text-primary hover:underline"
-                          title="Mark as read"
+                          onClick={() => deleteNotification(n.id)}
+                          className="text-on-surface-variant hover:text-error transition-colors"
+                          title="Delete notification"
                         >
-                          Mark read
+                          <span className="material-symbols-outlined text-[14px]">close</span>
                         </button>
-                      )}
+                      </div>
                     </li>
                   ))}
                 </ul>

@@ -25,4 +25,6 @@ func RegisterSettingsRoutes(mux *http.ServeMux, auth *kit.Auth, sh *handler.Sett
 	mux.Handle("GET /api/settings/disk", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetDiskUsage)))
 	mux.Handle("GET /api/settings/disk/notification-threshold", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetDiskNotificationThreshold)))
 	mux.Handle("PUT /api/settings/disk/notification-threshold", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetDiskNotificationThreshold)))
+	mux.Handle("GET /api/settings/publishing", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.GetPublishingSettings)))
+	mux.Handle("PUT /api/settings/publishing", auth.RequireSession(localauth.PermManage)(http.HandlerFunc(sh.SetPublishingSettings)))
 }

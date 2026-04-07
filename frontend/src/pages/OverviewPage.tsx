@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AreaChart,
   Area,
@@ -16,7 +16,7 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../api/client";
-import type { Environment, OverviewStats, Project } from "../types";
+import type { BuildTrend, Environment, OverviewStats, Project } from "../types";
 import { formatDate } from "../utils/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -171,9 +171,10 @@ function FilterDropdown({
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold font-headline transition-colors
           disabled:opacity-40 disabled:cursor-not-allowed
-          ${isActive
-            ? "bg-primary/10 text-primary border border-primary/20"
-            : "text-on-surface-variant border border-outline-variant/30 hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+          ${
+            isActive
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "text-on-surface-variant border border-outline-variant/30 hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
           }`}
       >
         <span className="material-symbols-outlined text-[14px]">{icon}</span>
@@ -194,15 +195,21 @@ function FilterDropdown({
           {/* "All" option */}
           <button
             type="button"
-            onClick={() => { onChange(""); setOpen(false); }}
+            onClick={() => {
+              onChange("");
+              setOpen(false);
+            }}
             className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2
-              ${!value
-                ? "text-primary font-semibold"
-                : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+              ${
+                !value
+                  ? "text-primary font-semibold"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
               }`}
           >
             {!value && (
-              <span className="material-symbols-outlined text-[12px] text-primary">check</span>
+              <span className="material-symbols-outlined text-[12px] text-primary">
+                check
+              </span>
             )}
             <span className={!value ? "" : "ml-[20px]"}>{placeholder}</span>
           </button>
@@ -218,17 +225,26 @@ function FilterDropdown({
             <button
               key={opt.value}
               type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
               className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2
-                ${value === opt.value
-                  ? "text-primary font-semibold"
-                  : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+                ${
+                  value === opt.value
+                    ? "text-primary font-semibold"
+                    : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
                 }`}
             >
               {value === opt.value && (
-                <span className="material-symbols-outlined text-[12px] text-primary">check</span>
+                <span className="material-symbols-outlined text-[12px] text-primary">
+                  check
+                </span>
               )}
-              <span className={value === opt.value ? "" : "ml-[20px]"} title={opt.label}>
+              <span
+                className={value === opt.value ? "" : "ml-[20px]"}
+                title={opt.label}
+              >
                 {opt.label}
               </span>
             </button>
@@ -246,23 +262,55 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter state
+  // Filter state - kept in URL so the page is shareable and survives refresh
+  const [params, setParams] = useSearchParams();
+  const selectedEnvId = params.get("env") ?? "";
+  const selectedProjectId = params.get("project") ?? "";
+
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedEnvId, setSelectedEnvId] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  function setSelectedEnvId(v: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v) next.set("env", v);
+        else next.delete("env");
+        next.delete("project"); // reset project when env changes
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function setSelectedProjectId(v: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (v) next.set("project", v);
+        else next.delete("project");
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   // Load environments once on mount
   useEffect(() => {
-    api.listEnvironments().then(setEnvironments).catch(() => {});
+    api
+      .listEnvironments()
+      .then(setEnvironments)
+      .catch(() => {});
   }, []);
 
   // Load projects when environment changes
   useEffect(() => {
-    setSelectedProjectId("");
     setProjects([]);
     if (!selectedEnvId) return;
-    api.listProjects(selectedEnvId).then(setProjects).catch(() => {});
+    api
+      .listProjects(selectedEnvId)
+      .then(setProjects)
+      .catch(() => {});
   }, [selectedEnvId]);
 
   // Load stats when filters change
@@ -334,7 +382,13 @@ export default function OverviewPage() {
     );
   }
 
-  const { summary, dailyTrends, topFailingProjects, recentBuilds } = stats;
+  const {
+    summary,
+    dailyTrends,
+    topFailingProjects,
+    recentBuilds,
+    projectBuildTrend,
+  } = stats;
 
   // Pie chart data - overall test distribution
   const pieData = [
@@ -382,7 +436,10 @@ export default function OverviewPage() {
             onChange={(v) => setSelectedEnvId(v)}
             placeholder="All environments"
             icon="folder_open"
-            options={environments.map((env) => ({ value: env.id, label: env.name }))}
+            options={environments.map((env) => ({
+              value: env.id,
+              label: env.name,
+            }))}
           />
           <FilterDropdown
             value={selectedProjectId}
@@ -394,14 +451,13 @@ export default function OverviewPage() {
           />
           {(selectedEnvId || selectedProjectId) && (
             <button
-              onClick={() => {
-                setSelectedEnvId("");
-                setSelectedProjectId("");
-              }}
+              onClick={() => setParams({}, { replace: true })}
               className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
               title="Clear filters"
             >
-              <span className="material-symbols-outlined text-[16px]">close</span>
+              <span className="material-symbols-outlined text-[16px]">
+                close
+              </span>
             </button>
           )}
         </div>
@@ -585,6 +641,158 @@ export default function OverviewPage() {
               )}
             </div>
           </Card>
+
+          {/* Build Trend - shown when an environment or project is selected */}
+          {(selectedProjectId || selectedEnvId) && (
+            <Card
+              title={
+                selectedProjectId
+                  ? "Project Build Trend (Last 30 Builds)"
+                  : "Environment Build Trend (Last 30 Builds)"
+              }
+              className="flex-shrink-0"
+              style={{ height: "38%" }}
+            >
+              <div className="flex-1 min-h-0 px-2 py-2 h-full">
+                {projectBuildTrend.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-sm text-on-surface-variant">
+                    No builds yet
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={projectBuildTrend}
+                      margin={{ top: 6, right: 12, left: -16, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="gradBuildPassed"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#10b981"
+                            stopOpacity={0.25}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#10b981"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+                        <linearGradient
+                          id="gradBuildFailed"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#ef4444"
+                            stopOpacity={0.25}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#ef4444"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="rgb(var(--color-outline-variant) / 0.25)"
+                      />
+                      <XAxis
+                        dataKey="buildId"
+                        tick={{
+                          fontSize: 10,
+                          fill: "rgb(var(--color-on-surface-variant))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                        tickFormatter={(id: string) =>
+                          id.length > 10 ? id.slice(0, 9) + "…" : id
+                        }
+                      />
+                      <YAxis
+                        tick={{
+                          fontSize: 10,
+                          fill: "rgb(var(--color-on-surface-variant))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload as BuildTrend;
+                          return (
+                            <div
+                              className="rounded-xl px-3 py-2 text-xs shadow-lg"
+                              style={{
+                                background:
+                                  "rgb(var(--color-surface-container-high))",
+                                border:
+                                  "1px solid rgb(var(--color-outline-variant) / 0.4)",
+                              }}
+                            >
+                              <p className="font-bold text-on-surface mb-1">
+                                {d.buildId}
+                              </p>
+                              <p className="text-on-surface-variant mb-1">
+                                {d.createdAt}
+                              </p>
+                              <p style={{ color: "#10b981" }}>
+                                Passed: {d.passed.toLocaleString()}
+                              </p>
+                              <p style={{ color: "#ef4444" }}>
+                                Failed: {d.failed.toLocaleString()}
+                              </p>
+                              {d.skipped > 0 && (
+                                <p style={{ color: "#6b7280" }}>
+                                  Skipped: {d.skipped.toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="passed"
+                        name="Passed"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#gradBuildPassed)"
+                        dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="failed"
+                        name="Failed"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        fill="url(#gradBuildFailed)"
+                        dot={{ r: 3, fill: "#ef4444", strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </Card>
+          )}
 
           {/* Recent builds table */}
           <Card

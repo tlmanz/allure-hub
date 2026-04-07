@@ -83,7 +83,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	envSvc := usecase.NewEnvironmentService(envRepo, projectRepo, buildRepo, sessionRepo, fs)
 	projectSvc := usecase.NewProjectService(projectRepo, buildRepo, sessionRepo, fs)
 	reportSvc := usecase.NewReportService(buildRepo, sessionRepo, bus, fs, gen, log)
-	uploadSvc := usecase.NewUploadService(reportSvc, fs, sessionRepo, envRepo, projectRepo, bus, cfg.Storage.AssembleTempDir, log)
+	uploadSvc := usecase.NewUploadService(reportSvc, fs, sessionRepo, envRepo, projectRepo, settingsRepo, bus, cfg.Storage.AssembleTempDir, log)
 	cleanupSvc := usecase.NewCleanupService(buildRepo, settingsRepo, cleanupRunRepo, fs, log)
 
 	// ── API keys ──────────────────────────────────────────────────────────────

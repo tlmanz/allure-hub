@@ -23,18 +23,20 @@ type UploadService struct {
 	sessionRepo     domain.UploadSessionRepository
 	envRepo         domain.EnvironmentRepository
 	projectRepo     domain.ProjectRepository
+	settingsRepo    domain.SystemSettingsRepository
 	bus             *EventBus
 	assembleTempDir string // directory for assembled zip temp file; defaults to chunk parent dir
 	log             *zap.Logger
 }
 
-func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, envRepo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, bus *EventBus, assembleTempDir string, log *zap.Logger) *UploadService {
+func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, envRepo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, settingsRepo domain.SystemSettingsRepository, bus *EventBus, assembleTempDir string, log *zap.Logger) *UploadService {
 	return &UploadService{
 		reportSvc:       reportSvc,
 		fs:              fs,
 		sessionRepo:     sessionRepo,
 		envRepo:         envRepo,
 		projectRepo:     projectRepo,
+		settingsRepo:    settingsRepo,
 		bus:             bus,
 		assembleTempDir: assembleTempDir,
 		log:             log,
@@ -294,21 +296,56 @@ func (s *UploadService) DeleteSession(ctx context.Context, id string) error {
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
+// autoCreateEnabled reports whether the auto_create_env_project setting is on.
+// Defaults to false on any error or missing key.
+func (s *UploadService) autoCreateEnabled(ctx context.Context) bool {
+	val, err := s.settingsRepo.Get(ctx, "auto_create_env_project")
+	if err != nil {
+		return false
+	}
+	return val == "true"
+}
+
 // validateEnvAndProject checks that the environment and project both exist.
-// Returns a descriptive error (wrapping the domain sentinel) if either is missing.
+// When the auto_create_env_project setting is enabled, missing environments
+// and projects are created on the fly using the ID as the display name.
 func (s *UploadService) validateEnvAndProject(ctx context.Context, envID, projectID string) error {
+	autoCreate := s.autoCreateEnabled(ctx)
+
 	if _, err := s.envRepo.Get(ctx, envID); err != nil {
-		if errors.Is(err, domain.ErrEnvironmentNotFound) {
+		if !errors.Is(err, domain.ErrEnvironmentNotFound) {
+			return fmt.Errorf("look up environment: %w", err)
+		}
+		if !autoCreate {
 			return fmt.Errorf("environment %q not found: %w", envID, domain.ErrEnvironmentNotFound)
 		}
-		return fmt.Errorf("look up environment: %w", err)
+		env, newErr := domain.NewEnvironment(envID, envID, "")
+		if newErr != nil {
+			return fmt.Errorf("auto-create environment %q: %w", envID, newErr)
+		}
+		if createErr := s.envRepo.Create(ctx, env); createErr != nil && !errors.Is(createErr, domain.ErrEnvironmentExists) {
+			return fmt.Errorf("auto-create environment %q: %w", envID, createErr)
+		}
+		s.log.Info("auto-created environment", zap.String("envId", envID))
 	}
+
 	if _, err := s.projectRepo.Get(ctx, envID, projectID); err != nil {
-		if errors.Is(err, domain.ErrProjectNotFound) {
+		if !errors.Is(err, domain.ErrProjectNotFound) {
+			return fmt.Errorf("look up project: %w", err)
+		}
+		if !autoCreate {
 			return fmt.Errorf("project %q not found in environment %q: %w", projectID, envID, domain.ErrProjectNotFound)
 		}
-		return fmt.Errorf("look up project: %w", err)
+		proj, newErr := domain.NewProject(envID, projectID, projectID)
+		if newErr != nil {
+			return fmt.Errorf("auto-create project %q: %w", projectID, newErr)
+		}
+		if createErr := s.projectRepo.Create(ctx, proj); createErr != nil && !errors.Is(createErr, domain.ErrProjectExists) {
+			return fmt.Errorf("auto-create project %q: %w", projectID, createErr)
+		}
+		s.log.Info("auto-created project", zap.String("envId", envID), zap.String("projectId", projectID))
 	}
+
 	return nil
 }
 

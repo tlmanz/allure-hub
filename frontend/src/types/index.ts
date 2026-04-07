@@ -158,11 +158,20 @@ export interface ProjectFailStats {
   passRate: number
 }
 
+export interface BuildTrend {
+  buildId: string
+  createdAt: string
+  passed: number
+  failed: number
+  skipped: number
+}
+
 export interface OverviewStats {
   summary: OverviewSummary
   dailyTrends: DailyTrend[]
   topFailingProjects: ProjectFailStats[]
   recentBuilds: Report[]
+  projectBuildTrend: BuildTrend[]
 }
 
 export interface DiskEntry {

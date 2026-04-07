@@ -50,11 +50,16 @@ func (r *OverviewRepo) GetStats(ctx context.Context, f domain.OverviewFilter) (*
 	if err != nil {
 		return nil, err
 	}
+	buildTrend, err := r.getProjectBuildTrend(ctx, f)
+	if err != nil {
+		return nil, err
+	}
 	return &domain.OverviewStats{
 		Summary:            *summary,
 		DailyTrends:        trends,
 		TopFailingProjects: topFailing,
 		RecentBuilds:       recent,
+		ProjectBuildTrend:  buildTrend,
 	}, nil
 }
 
@@ -196,6 +201,52 @@ func (r *OverviewRepo) getTopFailingProjects(ctx context.Context, f domain.Overv
 	}
 	if result == nil {
 		result = []domain.ProjectFailStats{}
+	}
+	return result, rows.Err()
+}
+
+// getProjectBuildTrend returns the last 30 builds (oldest→newest) within the
+// filter scope, with per-build pass/fail/skipped counts for the trend chart.
+func (r *OverviewRepo) getProjectBuildTrend(ctx context.Context, f domain.OverviewFilter) ([]domain.BuildTrend, error) {
+	extraWhere := ""
+	var args []any
+	if f.EnvID != "" {
+		extraWhere += " AND env_id = ?"
+		args = append(args, f.EnvID)
+	}
+	if f.ProjectID != "" {
+		extraWhere += " AND project_id = ?"
+		args = append(args, f.ProjectID)
+	}
+
+	// Fetch the 30 most recent builds then reverse so the chart reads left→right oldest→newest.
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Ph(`SELECT build_id, SUBSTR(created_at, 1, 10), passed, failed, skipped
+		FROM (
+		  SELECT build_id, created_at, passed, failed, skipped
+		  FROM builds
+		  WHERE 1=1`+extraWhere+`
+		  ORDER BY created_at DESC
+		  LIMIT 30
+		) sub
+		ORDER BY created_at ASC`),
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: overview build trend: %w", err)
+	}
+	defer rows.Close()
+
+	var result []domain.BuildTrend
+	for rows.Next() {
+		var t domain.BuildTrend
+		if err := rows.Scan(&t.BuildID, &t.CreatedAt, &t.Passed, &t.Failed, &t.Skipped); err != nil {
+			return nil, fmt.Errorf("repository: overview build trend scan: %w", err)
+		}
+		result = append(result, t)
+	}
+	if result == nil {
+		result = []domain.BuildTrend{}
 	}
 	return result, rows.Err()
 }

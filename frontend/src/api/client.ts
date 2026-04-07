@@ -162,6 +162,9 @@ export const api = {
   markAllNotificationsRead: () =>
     request<void>("/notifications/read", { method: "POST" }),
 
+  deleteNotification: (id: string) =>
+    request<void>(`/notifications/${enc(id)}`, { method: "DELETE" }),
+
   // Settings - API keys
   listAPIKeys: (search = "", offset = 0) =>
     request<PagedAPIKeys>(
@@ -250,6 +253,17 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thresholdPercent }),
+    }),
+
+  // Settings - publishing
+  getPublishingSettings: () =>
+    request<{ autoCreateEnvAndProject: boolean }>("/settings/publishing"),
+
+  setPublishingSettings: (settings: { autoCreateEnvAndProject: boolean }) =>
+    request<void>("/settings/publishing", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
     }),
 
   // Chunked upload - drives Init → Chunks → Complete → Generate.
