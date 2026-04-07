@@ -1,11 +1,11 @@
 # Authentication
 
-allure-hub supports two authentication methods: **Google OAuth** (for browser sessions) and **API keys** (for CI/CD and programmatic access). Both methods use the same RBAC permission model.
+allure-hub supports two authentication methods: **OAuth** (for browser sessions) and **API keys** (for CI/CD and programmatic access). Both methods use the same RBAC permission model.
 
 ```mermaid
 flowchart LR
     subgraph Browser
-        A[User] -->|Google OAuth| B[Session cookie]
+        A[User] -->|"Google / GitHub / GitLab OAuth"| B[Session cookie]
     end
     subgraph CI/CD
         C[Pipeline] -->|"Bearer ah_..."| D[API key]
@@ -15,7 +15,11 @@ flowchart LR
     E --> F[API access]
 ```
 
-## Google OAuth setup
+## OAuth providers
+
+Any combination of **Google**, **GitHub**, and **GitLab** can be enabled simultaneously — a provider is active when both its `CLIENT_ID` and `CLIENT_SECRET` are set. Users see a login button for each active provider.
+
+### Google
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) > APIs & Services > Credentials > **Create OAuth 2.0 Client ID**
 2. Application type: **Web application**
@@ -33,16 +37,92 @@ flowchart LR
         https://your-domain.com/auth/google/callback
         ```
 
-4. Copy the client ID and secret into `backend/.env`:
+4. Copy the credentials into `backend/.env`:
 
 ```bash
 GOOGLE_CLIENT_ID=744562771603-....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-...
-BASE_URL=https://your-domain.com
 ```
 
+### GitHub
+
+1. Go to **GitHub** > Settings > Developer settings > **OAuth Apps** > **New OAuth App**
+2. Set the **Authorization callback URL**:
+
+    === "Development"
+
+        ```
+        http://localhost:8080/auth/github/callback
+        ```
+
+    === "Production"
+
+        ```
+        https://your-domain.com/auth/github/callback
+        ```
+
+3. Copy the credentials into `backend/.env`:
+
+```bash
+GITHUB_CLIENT_ID=Ov23li...
+GITHUB_CLIENT_SECRET=...
+```
+
+### GitLab
+
+1. Go to **GitLab** > User Settings > Applications (or Admin > Applications for instance-wide)
+2. Set the **Redirect URI**:
+
+    === "Development"
+
+        ```
+        http://localhost:8080/auth/gitlab/callback
+        ```
+
+    === "Production"
+
+        ```
+        https://your-domain.com/auth/gitlab/callback
+        ```
+
+3. Scopes required: `read_user`
+4. Copy the credentials into `backend/.env`:
+
+```bash
+GITLAB_CLIENT_ID=...
+GITLAB_CLIENT_SECRET=...
+```
+
+!!! warning "BASE_URL must match exactly"
+    The server constructs each callback URL as `{BASE_URL}/auth/{provider}/callback` and sends it to the OAuth provider during the login flow. The registered redirect URI in the provider console must be **character-for-character identical** — same scheme (`http` vs `https`), host, port, and path. Any mismatch produces a *"redirect_uri is not associated with this application"* error.
+
+    | `BASE_URL` value | Callback sent to provider |
+    |---|---|
+    | `http://localhost:8080` | `http://localhost:8080/auth/google/callback` |
+    | `https://allure.example.com` | `https://allure.example.com/auth/google/callback` |
+
 !!! note "Development redirect"
-    In development, Google redirects directly to `:8080` (bypassing Vite). `AUTH_AFTER_LOGIN_URL=http://localhost:5173/` redirects back to the frontend after the callback completes.
+    In development, OAuth providers redirect directly to `:8080` (the backend, bypassing Vite). Set `AUTH_AFTER_LOGIN_URL=http://localhost:5173/` so the server redirects back to the frontend after the callback completes.
+
+## Troubleshooting
+
+### "redirect_uri is not associated with this application"
+
+The redirect URI sent by the server doesn't match what is registered in the OAuth provider console.
+
+**Checklist:**
+
+1. Confirm `BASE_URL` in `backend/.env` is set to the exact origin of your backend server (no trailing slash).
+2. Open the provider's app settings and verify the registered callback URL matches `{BASE_URL}/auth/{provider}/callback` exactly.
+3. After updating the provider's settings, allow a few minutes for changes to propagate before retrying.
+
+### Login button not visible
+
+The login page fetches active providers from `GET /auth/providers`. If no buttons appear:
+
+- Check that at least one provider has **both** its `CLIENT_ID` and `CLIENT_SECRET` set in `backend/.env`.
+- Verify the backend server is running and reachable from the browser.
+- Restart the backend after changing `.env` — environment variables are read at startup.
 
 ## RBAC policy
 

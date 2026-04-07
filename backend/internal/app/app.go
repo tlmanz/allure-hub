@@ -92,11 +92,11 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 	apiKeySvc := usecase.NewAPIKeyService(apiKeyRepo)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
-	auth, provider, providerCount, err := newAuth(cfg.Auth, db, keyStore, log)
+	auth, provider, providerNames, err := newAuth(cfg.Auth, db, keyStore, log)
 	if err != nil {
 		return nil, err
 	}
-	log.Info("authkit initialised", zap.Int("providers", providerCount))
+	log.Info("authkit initialised", zap.Strings("providers", providerNames))
 
 	// ── HTTP layer ────────────────────────────────────────────────────────────
 	router := transport.NewRouter(
@@ -117,6 +117,7 @@ func New(cfg config.Config, log *zap.Logger) (*App, error) {
 			RateLimitBurst: cfg.RateLimit.Burst,
 			TrustProxy:     cfg.RateLimit.TrustProxy,
 			AllureBin:      cfg.Allure.Bin,
+			ProviderNames:  providerNames,
 		},
 		log,
 	)

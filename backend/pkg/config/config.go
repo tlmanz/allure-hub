@@ -79,12 +79,18 @@ type LogConfig struct {
 }
 
 // AuthConfig holds authkit (OAuth + session + RBAC) parameters.
+// At least one OAuth provider (Google, GitHub, or GitLab) must be configured.
+// Any combination is supported - enable a provider by setting both its client ID and secret.
 type AuthConfig struct {
 	SessionSecret      string `env:"SESSION_SECRET,required"  hush:"mask"`
 	BaseURL            string `env:"BASE_URL"`
 	SecureCookie       bool   `env:"SECURE_COOKIE"            envDefault:"false"`
 	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"         hush:"mask"`
 	GoogleClientSecret string `env:"GOOGLE_CLIENT_SECRET"     hush:"mask"`
+	GitHubClientID     string `env:"GITHUB_CLIENT_ID"         hush:"mask"`
+	GitHubClientSecret string `env:"GITHUB_CLIENT_SECRET"     hush:"mask"`
+	GitLabClientID     string `env:"GITLAB_CLIENT_ID"         hush:"mask"`
+	GitLabClientSecret string `env:"GITLAB_CLIENT_SECRET"     hush:"mask"`
 	PolicyFile         string `env:"AUTH_POLICY_FILE"         envDefault:"./policy.yaml"`
 	AfterLoginURL      string `env:"AUTH_AFTER_LOGIN_URL"     envDefault:"/"`
 	AfterLogoutURL     string `env:"AUTH_AFTER_LOGOUT_URL"    envDefault:"/login"`

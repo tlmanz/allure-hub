@@ -11,7 +11,7 @@ import (
 	"github.com/tlmanz/authkit"
 )
 
-func newAuth(cfg config.AuthConfig, db *repository.DB, keyStore authkit.APIKeyValidator, log *zap.Logger) (*authkit.Auth, *authkit.LayeredPolicyProvider, int, error) {
+func newAuth(cfg config.AuthConfig, db *repository.DB, keyStore authkit.APIKeyValidator, log *zap.Logger) (*authkit.Auth, *authkit.LayeredPolicyProvider, []string, error) {
 	roleStore := repository.NewRoleStore(db)
 	zapLogger := transport.NewZapAuthLogger(log)
 
@@ -19,7 +19,7 @@ func newAuth(cfg config.AuthConfig, db *repository.DB, keyStore authkit.APIKeyVa
 		authkit.WithLogger(zapLogger),
 	)
 	if err != nil {
-		return nil, nil, 0, fmt.Errorf("authkit: layered provider: %w", err)
+		return nil, nil, nil, fmt.Errorf("authkit: layered provider: %w", err)
 	}
 
 	var providers []authkit.ProviderConfig
@@ -29,6 +29,25 @@ func newAuth(cfg config.AuthConfig, db *repository.DB, keyStore authkit.APIKeyVa
 			ClientID:     cfg.GoogleClientID,
 			ClientSecret: cfg.GoogleClientSecret,
 		})
+	}
+	if cfg.GitHubClientID != "" && cfg.GitHubClientSecret != "" {
+		providers = append(providers, authkit.ProviderConfig{
+			Name:         "github",
+			ClientID:     cfg.GitHubClientID,
+			ClientSecret: cfg.GitHubClientSecret,
+		})
+	}
+	if cfg.GitLabClientID != "" && cfg.GitLabClientSecret != "" {
+		providers = append(providers, authkit.ProviderConfig{
+			Name:         "gitlab",
+			ClientID:     cfg.GitLabClientID,
+			ClientSecret: cfg.GitLabClientSecret,
+		})
+	}
+
+	var providerNames []string
+	for _, p := range providers {
+		providerNames = append(providerNames, p.Name)
 	}
 
 	auth, err := authkit.New(authkit.Config{
@@ -43,7 +62,7 @@ func newAuth(cfg config.AuthConfig, db *repository.DB, keyStore authkit.APIKeyVa
 		APIKeyValidator: keyStore,
 	})
 	if err != nil {
-		return nil, nil, 0, fmt.Errorf("authkit: %w", err)
+		return nil, nil, nil, fmt.Errorf("authkit: %w", err)
 	}
-	return auth, provider, len(providers), nil
+	return auth, provider, providerNames, nil
 }

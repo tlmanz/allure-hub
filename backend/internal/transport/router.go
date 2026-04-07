@@ -31,6 +31,7 @@ type RouterConfig struct {
 	RateLimitBurst float64
 	TrustProxy     bool
 	AllureBin      string
+	ProviderNames  []string
 }
 
 // OverviewRepository is the minimal interface NewRouter needs for the overview handler.
@@ -68,7 +69,7 @@ func NewRouter(
 	settingsHandler := handler.NewSettingsHandler(apiKeySvc, userRepo, settingsRepo, provider, cleanupSvc, rcfg.AllureBin, rcfg.DataDir, log)
 	overviewHandler := handler.NewOverviewHandler(overviewRepo, log)
 
-	routes.RegisterAuthRoutes(mux, auth, userRepo)
+	routes.RegisterAuthRoutes(mux, auth, userRepo, rcfg.ProviderNames)
 	routes.RegisterEnvironmentRoutes(mux, auth, environmentHandler, projectHandler)
 	routes.RegisterReportRoutes(mux, auth, reportHandler, uploadHandler)
 	routes.RegisterSettingsRoutes(mux, auth, settingsHandler)

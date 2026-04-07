@@ -9,7 +9,18 @@ import (
 	kit "github.com/tlmanz/authkit"
 )
 
-func RegisterAuthRoutes(mux *http.ServeMux, auth *kit.Auth, userRepo domain.TrackedUserRepository) {
+func providersHandler(names []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if names == nil {
+			names = []string{}
+		}
+		json.NewEncoder(w).Encode(names)
+	}
+}
+
+func RegisterAuthRoutes(mux *http.ServeMux, auth *kit.Auth, userRepo domain.TrackedUserRepository, providerNames []string) {
+	mux.HandleFunc("GET /auth/providers", providersHandler(providerNames))
 	mux.HandleFunc("GET /auth/{provider}", auth.BeginAuth)
 	mux.HandleFunc("GET /auth/{provider}/callback", auth.Callback)
 	mux.HandleFunc("POST /auth/logout", auth.Logout)

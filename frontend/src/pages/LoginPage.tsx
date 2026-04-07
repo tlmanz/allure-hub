@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { APP_NAME, APP_VERSION } from "../design-system/tokens";
 import { useTheme } from "../context/ThemeContext";
 
@@ -23,8 +23,36 @@ const GoogleIcon: React.FC = () => (
   </svg>
 );
 
+const GitHubIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true" fill="currentColor">
+    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+  </svg>
+);
+
+const GitLabIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true" fill="#FC6D26">
+    <path d="M4.845.904a.9.9 0 00-.86.634L.079 11.752a1.266 1.266 0 00.46 1.415l11.419 8.305a.372.372 0 00.436 0l11.42-8.305a1.266 1.266 0 00.46-1.415L20.016 1.54a.9.9 0 00-.86-.635.9.9 0 00-.852.638l-2.954 9.086H8.65L5.697 1.542A.9.9 0 004.845.904z" />
+  </svg>
+);
+
+const PROVIDER_META: Record<string, { label: string; Icon: React.FC }> = {
+  google: { label: "Google", Icon: GoogleIcon },
+  github: { label: "GitHub", Icon: GitHubIcon },
+  gitlab: { label: "GitLab", Icon: GitLabIcon },
+};
+
 export default function LoginPage() {
   const { theme, toggleTheme } = useTheme();
+  const [providers, setProviders] = useState<string[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+
+  useEffect(() => {
+    fetch("/auth/providers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: string[]) => setProviders(Array.isArray(data) ? data : []))
+      .catch(() => setProviders([]))
+      .finally(() => setLoadingProviders(false));
+  }, []);
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background relative">
       {/* Theme toggle - top-right corner */}
@@ -137,17 +165,38 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <a
-              href="/auth/google"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border font-medium text-sm font-headline transition-all hover:bg-black/5 dark:hover:bg-white/5 hover:border-primary/30 hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                borderColor: "rgb(var(--color-outline-variant) / 0.6)",
-                color: "rgb(var(--color-on-surface))",
-              }}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </a>
+            {loadingProviders ? (
+              <div className="w-full flex items-center justify-center gap-2 py-3 text-sm text-on-surface-variant">
+                <span className="material-symbols-outlined text-[18px] animate-spin">
+                  progress_activity
+                </span>
+                Loading…
+              </div>
+            ) : providers.length === 0 ? (
+              <p className="text-sm text-error text-center px-2">
+                No authentication providers configured. Set at least one OAuth provider in the server environment.
+              </p>
+            ) : (
+              providers.map((name) => {
+                const meta = PROVIDER_META[name];
+                if (!meta) return null;
+                const { label, Icon } = meta;
+                return (
+                  <a
+                    key={name}
+                    href={`/auth/${name}`}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border font-medium text-sm font-headline transition-all hover:bg-black/5 dark:hover:bg-white/5 hover:border-primary/30 hover:scale-[1.02] active:scale-[0.98]"
+                    style={{
+                      borderColor: "rgb(var(--color-outline-variant) / 0.6)",
+                      color: "rgb(var(--color-on-surface))",
+                    }}
+                  >
+                    <Icon />
+                    Continue with {label}
+                  </a>
+                );
+              })
+            )}
           </div>
 
           <p

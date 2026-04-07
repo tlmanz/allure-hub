@@ -38,8 +38,16 @@ Create `backend/.env` (gitignored):
 SESSION_SECRET=<openssl rand -hex 32>
 BASE_URL=http://localhost:8080
 SECURE_COOKIE=false
+
+# Enable at least one OAuth provider by setting both its ID and secret.
+# Any combination of Google, GitHub, and GitLab is supported.
 GOOGLE_CLIENT_ID=<your-google-client-id>
 GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+# GITHUB_CLIENT_ID=<your-github-client-id>
+# GITHUB_CLIENT_SECRET=<your-github-client-secret>
+# GITLAB_CLIENT_ID=<your-gitlab-client-id>
+# GITLAB_CLIENT_SECRET=<your-gitlab-client-secret>
+
 AUTH_POLICY_FILE=./policy.yaml
 AUTH_AFTER_LOGIN_URL=http://localhost:5173/
 AUTH_AFTER_LOGOUT_URL=http://localhost:5173/login

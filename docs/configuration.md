@@ -68,9 +68,16 @@ Migrations run automatically on startup for both drivers.
 | `SECURE_COOKIE` | `false` | Set `true` in production (HTTPS only) |
 | `GOOGLE_CLIENT_ID` | - | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret |
+| `GITHUB_CLIENT_ID` | - | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | - | GitHub OAuth app client secret |
+| `GITLAB_CLIENT_ID` | - | GitLab OAuth app client ID |
+| `GITLAB_CLIENT_SECRET` | - | GitLab OAuth app client secret |
 | `AUTH_POLICY_FILE` | `./policy.yaml` | Path to RBAC policy file (used as baseline - see below) |
 | `AUTH_AFTER_LOGIN_URL` | `/` | Redirect URL after successful login |
 | `AUTH_AFTER_LOGOUT_URL` | `/login` | Redirect URL after logout |
+
+!!! tip "Enabling providers"
+    A provider is active when **both** its `CLIENT_ID` and `CLIENT_SECRET` are set. Any combination of Google, GitHub, and GitLab can be enabled simultaneously — users can choose which to sign in with.
 
 ## RBAC
 
