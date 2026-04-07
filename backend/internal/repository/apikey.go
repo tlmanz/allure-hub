@@ -16,12 +16,13 @@ func NewAPIKeyRepo(db *DB) *APIKeyRepo { return &APIKeyRepo{db} }
 
 func (r *APIKeyRepo) Create(ctx context.Context, k *domain.APIKey) error {
 	_, err := r.db.ExecContext(ctx,
-		r.db.Ph(`INSERT INTO api_keys (id, name, created_by, role, key_hash, created_at, expires_at, is_active)
-		          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+		r.db.Ph(`INSERT INTO api_keys (id, name, created_by, role, key_hash, created_at, expires_at, is_active, auto_create_env_project)
+		          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		k.ID, k.Name, k.CreatedBy, k.Role, k.KeyHash,
 		k.CreatedAt.UTC().Format(time.RFC3339),
 		nullTimePtr(k.ExpiresAt),
 		boolToInt(k.IsActive),
+		boolToInt(k.AutoCreateEnvProject),
 	)
 	if err != nil {
 		return fmt.Errorf("repository: create api key: %w", err)
@@ -32,9 +33,19 @@ func (r *APIKeyRepo) Create(ctx context.Context, k *domain.APIKey) error {
 // GetByHash looks up an active key by its SHA-256 hash. Returns nil if not found.
 func (r *APIKeyRepo) GetByHash(ctx context.Context, keyHash string) (*domain.APIKey, error) {
 	row := r.db.QueryRowContext(ctx,
-		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active
+		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active, auto_create_env_project
 		         FROM api_keys WHERE key_hash = ? LIMIT 1`),
 		keyHash,
+	)
+	return scanAPIKey(row)
+}
+
+// GetByName looks up the most recent active key with the given name. Returns nil if not found.
+func (r *APIKeyRepo) GetByName(ctx context.Context, name string) (*domain.APIKey, error) {
+	row := r.db.QueryRowContext(ctx,
+		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active, auto_create_env_project
+		         FROM api_keys WHERE name = ? AND is_active = 1 ORDER BY created_at DESC LIMIT 1`),
+		name,
 	)
 	return scanAPIKey(row)
 }
@@ -45,7 +56,7 @@ func (r *APIKeyRepo) GetByHash(ctx context.Context, keyHash string) (*domain.API
 func (r *APIKeyRepo) Search(ctx context.Context, query string, limit, offset int) ([]*domain.APIKey, error) {
 	like := "%" + query + "%"
 	rows, err := r.db.QueryContext(ctx,
-		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active
+		r.db.Ph(`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active, auto_create_env_project
 		         FROM api_keys
 		         WHERE LOWER(name) LIKE LOWER(?) OR LOWER(created_by) LIKE LOWER(?)
 		         ORDER BY created_at DESC LIMIT ? OFFSET ?`),
@@ -85,7 +96,7 @@ func (r *APIKeyRepo) CountSearch(ctx context.Context, query string) (int, error)
 // List returns all keys ordered by created_at descending.
 func (r *APIKeyRepo) List(ctx context.Context) ([]*domain.APIKey, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active
+		`SELECT id, name, created_by, role, key_hash, last_used_at, created_at, expires_at, is_active, auto_create_env_project
 		 FROM api_keys ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -145,31 +156,31 @@ func (r *APIKeyRepo) Delete(ctx context.Context, id string) error {
 func scanAPIKey(row *sql.Row) (*domain.APIKey, error) {
 	var k domain.APIKey
 	var lastUsedAt, createdAt, expiresAt sql.NullString
-	var isActive int
+	var isActive, autoCreate int
 	err := row.Scan(&k.ID, &k.Name, &k.CreatedBy, &k.Role, &k.KeyHash,
-		&lastUsedAt, &createdAt, &expiresAt, &isActive)
+		&lastUsedAt, &createdAt, &expiresAt, &isActive, &autoCreate)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("repository: scan api key: %w", err)
 	}
-	return finishAPIKeyScan(&k, lastUsedAt, createdAt, expiresAt, isActive)
+	return finishAPIKeyScan(&k, lastUsedAt, createdAt, expiresAt, isActive, autoCreate)
 }
 
 func scanAPIKeyRow(rows *sql.Rows) (*domain.APIKey, error) {
 	var k domain.APIKey
 	var lastUsedAt, createdAt, expiresAt sql.NullString
-	var isActive int
+	var isActive, autoCreate int
 	err := rows.Scan(&k.ID, &k.Name, &k.CreatedBy, &k.Role, &k.KeyHash,
-		&lastUsedAt, &createdAt, &expiresAt, &isActive)
+		&lastUsedAt, &createdAt, &expiresAt, &isActive, &autoCreate)
 	if err != nil {
 		return nil, fmt.Errorf("repository: scan api key row: %w", err)
 	}
-	return finishAPIKeyScan(&k, lastUsedAt, createdAt, expiresAt, isActive)
+	return finishAPIKeyScan(&k, lastUsedAt, createdAt, expiresAt, isActive, autoCreate)
 }
 
-func finishAPIKeyScan(k *domain.APIKey, lastUsedAt, createdAt, expiresAt sql.NullString, isActive int) (*domain.APIKey, error) {
+func finishAPIKeyScan(k *domain.APIKey, lastUsedAt, createdAt, expiresAt sql.NullString, isActive, autoCreate int) (*domain.APIKey, error) {
 	var err error
 	if k.CreatedAt, err = parseTimestamp(createdAt.String); err != nil {
 		return nil, err
@@ -189,6 +200,7 @@ func finishAPIKeyScan(k *domain.APIKey, lastUsedAt, createdAt, expiresAt sql.Nul
 		k.ExpiresAt = &t
 	}
 	k.IsActive = isActive == 1
+	k.AutoCreateEnvProject = autoCreate == 1
 	return k, nil
 }
 

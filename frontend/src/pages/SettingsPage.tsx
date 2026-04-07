@@ -196,6 +196,57 @@ function RoleDropdown({
   );
 }
 
+// ── Create key modal ─────────────────────────────────────────────────────────
+
+function CreateKeyModal({
+  onCreated,
+  onClose,
+}: {
+  onCreated: (plaintext: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl shadow-2xl border p-6 space-y-5"
+        style={{
+          background: "rgb(var(--color-surface-container))",
+          borderColor: "rgb(var(--color-outline-variant) / 0.4)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-headline font-bold text-on-surface">
+              Create API Key
+            </h3>
+            <p className="text-sm text-on-surface-variant mt-1">
+              Keys are shown{" "}
+              <span className="text-error font-semibold">once</span> at
+              creation. Store them securely.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+        <CreateKeyForm
+          onCreated={(pt) => {
+            onClose();
+            onCreated(pt);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Create key form ───────────────────────────────────────────────────────────
 
 function CreateKeyForm({
@@ -205,6 +256,7 @@ function CreateKeyForm({
 }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("developer");
+  const [autoCreate, setAutoCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -214,9 +266,10 @@ function CreateKeyForm({
     setSubmitting(true);
     setError(null);
     try {
-      const result = await api.createAPIKey(name.trim(), role);
+      const result = await api.createAPIKey(name.trim(), role, autoCreate);
       setName("");
       setRole("developer");
+      setAutoCreate(false);
       onCreated(result.plaintext);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create API key");
@@ -226,35 +279,60 @@ function CreateKeyForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-3 flex-wrap">
-      <div className="flex-1 min-w-[180px]">
-        <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">
-          Key Name
-        </label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. ci-pipeline"
-          required
-          className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
-        />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-end gap-3 flex-wrap">
+        <div className="flex-1 min-w-[180px]">
+          <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">
+            Key Name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. ci-pipeline"
+            required
+            className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg px-3 py-2 text-sm font-mono text-on-surface outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">
+            Role
+          </label>
+          <RoleDropdown value={role} onChange={setRole} />
+        </div>
+        <button
+          type="submit"
+          disabled={submitting || !name.trim()}
+          className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[16px]">add</span>
+          {submitting ? "Creating…" : "Create Key"}
+        </button>
       </div>
-      <div>
-        <label className="block text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">
-          Role
-        </label>
-        <RoleDropdown value={role} onChange={setRole} />
-      </div>
-      <button
-        type="submit"
-        disabled={submitting || !name.trim()}
-        className="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
-      >
-        <span className="material-symbols-outlined text-[16px]">add</span>
-        {submitting ? "Creating…" : "Create Key"}
-      </button>
-      {error && <p className="w-full text-xs text-error">{error}</p>}
+
+      {/* Auto-create toggle */}
+      <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoCreate}
+          onClick={() => setAutoCreate((v) => !v)}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+            autoCreate ? "bg-primary" : "bg-outline-variant"
+          }`}
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+              autoCreate ? "translate-x-4" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+        <span className="text-xs text-on-surface-variant">
+          Auto-create environment &amp; project if missing
+        </span>
+      </label>
+
+      {error && <p className="text-xs text-error">{error}</p>}
     </form>
   );
 }
@@ -292,6 +370,7 @@ function APIKeysSection() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [plaintext, setPlaintext] = useState<string | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const { show: showAlert, SnackbarNode } = useSnackbar();
 
@@ -374,6 +453,13 @@ function APIKeysSection() {
 
   return (
     <div className="flex flex-col gap-8 h-full">
+      {createModalOpen && (
+        <CreateKeyModal
+          onCreated={handleCreated}
+          onClose={() => setCreateModalOpen(false)}
+        />
+      )}
+
       {/* Role reference */}
       <section className="shrink-0">
         <div className="flex items-center gap-2 mb-3">
@@ -431,26 +517,6 @@ function APIKeysSection() {
         </div>
       </section>
 
-      {/* Generate card */}
-      <section className="shrink-0">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="material-symbols-outlined text-[18px] text-primary">
-            add_circle
-          </span>
-          <h3 className="text-sm font-headline font-bold text-on-surface">
-            Generate New Key
-          </h3>
-        </div>
-        <div className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10">
-          <p className="text-xs text-on-surface-variant mb-4">
-            Keys are shown{" "}
-            <span className="font-semibold text-on-surface">once</span> at
-            creation. Store them securely - they cannot be recovered.
-          </p>
-          <CreateKeyForm onCreated={handleCreated} />
-        </div>
-      </section>
-
       {/* Manage keys card */}
       <section className="flex flex-col min-h-0 flex-1">
         <div className="flex items-center justify-between gap-4 mb-3 shrink-0">
@@ -467,11 +533,20 @@ function APIKeysSection() {
               )}
             </h3>
           </div>
-          <SearchInput
-            value={search}
-            onValueChange={setSearch}
-            placeholder="Search by name or creator…"
-          />
+          <div className="flex items-center gap-3">
+            <SearchInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Search by name or creator…"
+            />
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="flex items-center gap-1.5 bg-primary text-on-primary px-3.5 py-2 rounded-lg text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all shrink-0"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Add Key
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -526,6 +601,11 @@ function APIKeysSection() {
                       >
                         {k.role}
                       </span>
+                      {k.autoCreateEnvProject && k.isActive && (
+                        <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          auto-create
+                        </span>
+                      )}
                       {!k.isActive && (
                         <span className="text-[10px] font-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-error/10 text-error">
                           Revoked
@@ -1405,111 +1485,6 @@ function AllureVersionSection() {
   );
 }
 
-// ── Publishing section ────────────────────────────────────────────────────────
-
-function PublishingSection() {
-  const { user: me } = useAuth();
-  const isAdmin = me?.role === "admin";
-  const [autoCreate, setAutoCreate] = useState<boolean | null>(null);
-  const [saving, setSaving] = useState(false);
-  const { show: showAlert, SnackbarNode } = useSnackbar();
-
-  useEffect(() => {
-    api
-      .getPublishingSettings()
-      .then((d) => setAutoCreate(d.autoCreateEnvAndProject))
-      .catch(() => setAutoCreate(false));
-  }, []);
-
-  async function handleToggle(next: boolean) {
-    if (!isAdmin) return;
-    setSaving(true);
-    try {
-      await api.setPublishingSettings({ autoCreateEnvAndProject: next });
-      setAutoCreate(next);
-      showAlert(
-        next
-          ? { title: "Auto-create enabled", description: "Environments and projects will be created automatically on first publish." }
-          : { title: "Auto-create disabled", description: "Uploads will fail with a 404 if the environment or project doesn't exist." },
-      );
-    } catch (err) {
-      showAlert(
-        err instanceof Error
-          ? err.message
-          : "Failed to update publishing settings",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-surface-container-low rounded-2xl border border-outline-variant/10 overflow-hidden divide-y divide-outline-variant/10">
-        <div className="px-5 py-4 flex items-center justify-between gap-6">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
-                create_new_folder
-              </span>
-              <p className="text-sm font-headline font-semibold text-on-surface">
-                Auto-create environment &amp; project
-              </p>
-            </div>
-            <p className="text-xs text-on-surface-variant mt-0.5">
-              When enabled, publishing results to an environment or project that
-              doesn't exist will create it automatically. When disabled, the
-              upload fails with a 404 if either is missing.
-            </p>
-          </div>
-          <div className="shrink-0">
-            {autoCreate === null ? (
-              <span className="text-sm text-on-surface-variant animate-pulse">
-                loading…
-              </span>
-            ) : isAdmin ? (
-              <button
-                onClick={() => handleToggle(!autoCreate)}
-                disabled={saving}
-                aria-pressed={autoCreate}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${
-                  autoCreate ? "bg-primary" : "bg-outline-variant"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                    autoCreate ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            ) : (
-              <span
-                className={`text-xs font-label font-bold px-2.5 py-1 rounded-full ${
-                  autoCreate
-                    ? "bg-primary/10 text-primary"
-                    : "bg-surface-container text-on-surface-variant"
-                }`}
-              >
-                {autoCreate ? "Enabled" : "Disabled"}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!isAdmin && (
-        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/10 text-xs text-on-surface-variant">
-          <span className="material-symbols-outlined text-[16px]">lock</span>
-          Only admins can change publishing settings.
-        </div>
-      )}
-
-      {SnackbarNode}
-    </div>
-  );
-}
-
 // ── Disk Usage section ────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -1761,7 +1736,7 @@ function DiskUsageSection() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-type Tab = "apikeys" | "users" | "retention" | "allure" | "disk" | "publishing";
+type Tab = "apikeys" | "users" | "retention" | "allure" | "disk";
 
 const NAV_ITEMS: {
   key: Tab;
@@ -1799,12 +1774,6 @@ const NAV_ITEMS: {
     description: "Storage consumed by reports & results",
     icon: "database",
   },
-  {
-    key: "publishing",
-    label: "Publishing",
-    description: "Results upload behaviour",
-    icon: "publish",
-  },
 ];
 
 const SECTION_META: Record<Tab, { title: string; description: string }> = {
@@ -1833,11 +1802,6 @@ const SECTION_META: Record<Tab, { title: string; description: string }> = {
     description:
       "Storage consumed by the data directory, broken down by project.",
   },
-  publishing: {
-    title: "Publishing",
-    description:
-      "Control how results are published when the target environment or project doesn't exist yet.",
-  },
 };
 
 export default function SettingsPage() {
@@ -1852,8 +1816,6 @@ export default function SettingsPage() {
           ? "allure"
           : raw === "disk"
             ? "disk"
-            : raw === "publishing"
-              ? "publishing"
               : "apikeys";
   const setActiveTab = (tab: Tab) => setParams({ tab });
   const { title, description } = SECTION_META[activeTab];
@@ -1920,7 +1882,6 @@ export default function SettingsPage() {
             {activeTab === "retention" && <DataRetentionSection />}
             {activeTab === "allure" && <AllureVersionSection />}
             {activeTab === "disk" && <DiskUsageSection />}
-            {activeTab === "publishing" && <PublishingSection />}
           </div>
         )}
       </div>

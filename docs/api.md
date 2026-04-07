@@ -11,6 +11,60 @@ All `/api/*` routes require authentication. Permission requirements are noted pe
 | `PATCH` | `/api/environments/{envId}` | `manage` | Update an environment |
 | `DELETE` | `/api/environments/{envId}` | `manage` | Delete an environment |
 
+!!! note "Session required for mutations"
+    `POST`, `PATCH`, and `DELETE` require an active OAuth session. `GET` accepts both session and API key authentication.
+
+### Create environment
+
+```
+POST /api/environments
+```
+
+**Body (JSON):**
+
+```json
+{
+  "id": "staging",
+  "name": "Staging",
+  "icon": "cloud"
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | Yes | Unique slug. Lowercase letters, numbers, and hyphens only. |
+| `name` | Yes | Display name |
+| `icon` | No | [Material Symbols](https://fonts.google.com/icons) icon name. Defaults to `deployed_code`. |
+
+**Response (201):** The created `Environment` object.
+
+```json
+{
+  "id": "staging",
+  "name": "Staging",
+  "icon": "cloud",
+  "createdAt": "2024-01-15T10:00:00Z",
+  "projectCount": 0
+}
+```
+
+### Update environment
+
+```
+PATCH /api/environments/{envId}
+```
+
+**Body (JSON):**
+
+```json
+{
+  "name": "Staging Env",
+  "icon": "layers"
+}
+```
+
+**Response (200):** The updated `Environment` object.
+
 ## Projects
 
 | Method | Path | Permission | Description |
@@ -18,6 +72,40 @@ All `/api/*` routes require authentication. Permission requirements are noted pe
 | `GET` | `/api/environments/{envId}/projects` | `view` | List projects in an environment |
 | `POST` | `/api/environments/{envId}/projects` | `manage` | Create a project |
 | `DELETE` | `/api/environments/{envId}/projects/{projectId}` | `manage` | Delete a project |
+
+!!! note "Session required for mutations"
+    `POST` and `DELETE` require an active OAuth session. `GET` accepts both session and API key authentication.
+
+### Create project
+
+```
+POST /api/environments/{envId}/projects
+```
+
+**Body (JSON):**
+
+```json
+{
+  "id": "my-project",
+  "name": "My Project"
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | Yes | Unique slug within the environment. Lowercase letters, numbers, and hyphens only. |
+| `name` | Yes | Display name |
+
+**Response (201):** The created `Project` object.
+
+```json
+{
+  "id": "my-project",
+  "environmentId": "staging",
+  "name": "My Project",
+  "createdAt": "2024-01-15T10:00:00Z"
+}
+```
 
 ## Upload - Strategy A: streaming
 
@@ -28,8 +116,6 @@ POST /api/environments/{envId}/projects/{projectId}/results
 ```
 
 **Permission:** `upload`
-
-**Headers:**
 
 **Query parameters:**
 
@@ -356,9 +442,46 @@ Settings endpoints require an active **session** (OAuth login). API keys cannot 
 
 | Method | Path | Permission | Description |
 |---|---|---|---|
-| `GET` | `/api/settings/apikeys` | `manage` | List all API keys (hashes never returned) |
+| `GET` | `/api/settings/apikeys` | `manage` | List API keys (paginated, searchable) |
 | `POST` | `/api/settings/apikeys` | `manage` | Create a new API key |
 | `DELETE` | `/api/settings/apikeys/{id}` | `manage` | Revoke or permanently delete a key |
+
+#### List API keys
+
+```
+GET /api/settings/apikeys?search=&offset=
+```
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `search` | `` | Filter by key name (substring match) |
+| `offset` | `0` | Pagination offset |
+
+**Response (200):**
+
+```json
+{
+  "keys": [
+    {
+      "id": "01HXY...",
+      "name": "ci-pipeline",
+      "createdBy": "alice@example.com",
+      "role": "developer",
+      "lastUsedAt": "2024-01-15T12:00:00Z",
+      "createdAt": "2024-01-15T10:00:00Z",
+      "isActive": true,
+      "autoCreateEnvProject": false
+    }
+  ],
+  "total": 5,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+Key hashes are never returned. Revoked keys are included in the listing with `isActive: false`.
 
 #### Create API key
 
@@ -371,25 +494,37 @@ POST /api/settings/apikeys
 ```json
 {
   "name": "ci-pipeline",
-  "role": "developer"
+  "role": "developer",
+  "autoCreateEnvProject": false
 }
 ```
 
-`role` must be one of `admin`, `developer`, or `viewer`.
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | Human-readable label for the key |
+| `role` | No | `admin`, `developer`, or `viewer`. Defaults to `developer`. |
+| `autoCreateEnvProject` | No | When `true`, upload requests using this key will automatically create the target environment and project if they don't exist. |
 
 **Response (201):**
 
 ```json
 {
-  "id": "01HXY...",
-  "name": "ci-pipeline",
-  "role": "developer",
-  "key": "ah_a3f9..."
+  "key": {
+    "id": "01HXY...",
+    "name": "ci-pipeline",
+    "createdBy": "alice@example.com",
+    "role": "developer",
+    "lastUsedAt": null,
+    "createdAt": "2024-01-15T10:00:00Z",
+    "isActive": true,
+    "autoCreateEnvProject": false
+  },
+  "plaintext": "ah_a3f9..."
 }
 ```
 
 !!! warning "Save the key now"
-    The plaintext key is returned **once** at creation time. The server stores only its SHA-256 hash and cannot recover the original value.
+    The `plaintext` value is returned **once** at creation time. The server stores only its SHA-256 hash and cannot recover the original value.
 
 #### Delete or revoke API key
 

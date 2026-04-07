@@ -7,8 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar,
   Cell,
   PieChart,
   Pie,
@@ -20,12 +18,6 @@ import type { BuildTrend, Environment, OverviewStats, Project } from "../types";
 import { formatDate } from "../utils/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function passRateColor(rate: number) {
-  if (rate >= 80) return "#10b981";
-  if (rate >= 50) return "#f59e0b";
-  return "#ef4444";
-}
 
 function passRateTextCls(rate: number) {
   if (rate >= 80) return "text-emerald-500";
@@ -405,18 +397,6 @@ export default function OverviewPage() {
       color: "#6b7280",
     },
   ].filter((d) => d.value > 0);
-
-  // Horizontal bar data for top failing
-  const barData = topFailingProjects.map((p) => ({
-    name:
-      p.projectName.length > 14
-        ? p.projectName.slice(0, 13) + "…"
-        : p.projectName,
-    fullName: p.projectName,
-    failures: p.totalFailed,
-    passRate: p.passRate,
-    to: `/environments/${encodeURIComponent(p.envId)}/projects/${encodeURIComponent(p.projectId)}`,
-  }));
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -948,90 +928,62 @@ export default function OverviewPage() {
             </div>
           </Card>
 
-          {/* Top failing projects - horizontal bar */}
+          {/* Top failing projects - ranked list */}
           <Card title="Top Failing Projects" className="flex-1 min-h-0">
-            <div className="flex-1 min-h-0 px-1 py-2">
-              {barData.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-sm text-on-surface-variant">
-                  No failures recorded
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={barData}
-                    layout="vertical"
-                    margin={{ top: 0, right: 40, left: 4, bottom: 0 }}
-                    barCategoryGap="25%"
+            {topFailingProjects.length === 0 ? (
+              <div className="flex items-center justify-center flex-1 text-sm text-on-surface-variant">
+                No failures recorded
+              </div>
+            ) : (
+              <div className="flex flex-col overflow-y-auto flex-1">
+                {topFailingProjects.map((p, i) => (
+                  <Link
+                    key={`${p.envId}/${p.projectId}`}
+                    to={`/environments/${encodeURIComponent(p.envId)}/projects/${encodeURIComponent(p.projectId)}`}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors group"
+                    style={i > 0 ? { borderTop: "1px solid rgb(var(--color-outline-variant) / 0.1)" } : undefined}
                   >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      horizontal={false}
-                      stroke="rgb(var(--color-outline-variant) / 0.25)"
-                    />
-                    <XAxis
-                      type="number"
-                      tick={{
-                        fontSize: 10,
-                        fill: "rgb(var(--color-on-surface-variant))",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={80}
-                      tick={{
-                        fontSize: 10,
-                        fill: "rgb(var(--color-on-surface-variant))",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const d = payload[0].payload;
-                        return (
-                          <div
-                            className="rounded-xl px-3 py-2 text-xs shadow-lg"
-                            style={{
-                              background:
-                                "rgb(var(--color-surface-container-high))",
-                              border:
-                                "1px solid rgb(var(--color-outline-variant) / 0.4)",
-                            }}
-                          >
-                            <p className="font-bold text-on-surface mb-1">
-                              {d.fullName}
-                            </p>
-                            <p style={{ color: "#ef4444" }}>
-                              {d.failures.toLocaleString()} failures
-                            </p>
-                            <p style={{ color: passRateColor(d.passRate) }}>
-                              Pass rate: {d.passRate}%
-                            </p>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Bar
-                      dataKey="failures"
-                      name="Failures"
-                      radius={[0, 4, 4, 0]}
-                    >
-                      {barData.map((d) => (
-                        <Cell
-                          key={d.name}
-                          fill={passRateColor(d.passRate)}
-                          fillOpacity={0.85}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+                    {/* Rank */}
+                    <span className="text-[11px] font-bold tabular-nums text-on-surface-variant w-4 shrink-0">
+                      {i + 1}
+                    </span>
+
+                    {/* Name + progress bar */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-on-surface truncate group-hover:text-primary transition-colors">
+                        {p.projectName}
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant truncate mb-1.5">
+                        {p.envName}
+                      </p>
+                      {/* Segmented pass/fail bar */}
+                      <div
+                        className="h-1 rounded-full"
+                        style={{
+                          background: `linear-gradient(to right, #10b981 ${p.passRate}%, #ef4444 ${p.passRate}%)`,
+                        }}
+                      />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11px] font-bold text-red-500 tabular-nums">
+                        {p.totalFailed.toLocaleString()}
+                        <span className="font-normal text-on-surface-variant text-[10px]">
+                          {" "}
+                          fail
+                        </span>
+                      </p>
+                      <p
+                        className={`text-[10px] font-semibold tabular-nums ${passRateTextCls(p.passRate)}`}
+                      >
+                        {p.passRate}%
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </div>

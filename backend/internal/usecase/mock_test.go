@@ -275,6 +275,14 @@ func (r *memAPIKeyRepo) Search(_ context.Context, _ string, _, _ int) ([]*domain
 func (r *memAPIKeyRepo) CountSearch(_ context.Context, _ string) (int, error) {
 	return len(r.keys), nil
 }
+func (r *memAPIKeyRepo) GetByName(_ context.Context, name string) (*domain.APIKey, error) {
+	for _, k := range r.keys {
+		if k.Name == name && k.IsActive {
+			return k, nil
+		}
+	}
+	return nil, nil
+}
 func (r *memAPIKeyRepo) UpdateLastUsed(_ context.Context, _ string) error { return nil }
 func (r *memAPIKeyRepo) Revoke(_ context.Context, id string) error {
 	if k, ok := r.keys[id]; ok {

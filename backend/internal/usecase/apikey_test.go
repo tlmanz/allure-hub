@@ -12,7 +12,7 @@ func TestAPIKeyService_Create_ValidRoles(t *testing.T) {
 	for _, role := range []string{"admin", "developer", "viewer"} {
 		t.Run(role, func(t *testing.T) {
 			svc := usecase.NewAPIKeyService(newMemAPIKeyRepo())
-			res, err := svc.Create(context.Background(), "ci-key", role, "admin@example.com")
+			res, err := svc.Create(context.Background(), "ci-key", role, "admin@example.com", false)
 			if err != nil {
 				t.Fatalf("Create(%q): %v", role, err)
 			}
@@ -34,7 +34,7 @@ func TestAPIKeyService_Create_ValidRoles(t *testing.T) {
 
 func TestAPIKeyService_Create_InvalidRole(t *testing.T) {
 	svc := usecase.NewAPIKeyService(newMemAPIKeyRepo())
-	_, err := svc.Create(context.Background(), "key", "superadmin", "admin@example.com")
+	_, err := svc.Create(context.Background(), "key", "superadmin", "admin@example.com", false)
 	if err == nil {
 		t.Fatal("expected error for invalid role, got nil")
 	}
@@ -43,7 +43,7 @@ func TestAPIKeyService_Create_InvalidRole(t *testing.T) {
 func TestAPIKeyService_Create_RepoError(t *testing.T) {
 	repo := &memAPIKeyRepo{err: errAny}
 	svc := usecase.NewAPIKeyService(repo)
-	_, err := svc.Create(context.Background(), "key", "viewer", "admin@example.com")
+	_, err := svc.Create(context.Background(), "key", "viewer", "admin@example.com", false)
 	if err == nil {
 		t.Fatal("expected repo error to propagate, got nil")
 	}
@@ -52,8 +52,8 @@ func TestAPIKeyService_Create_RepoError(t *testing.T) {
 func TestAPIKeyService_List(t *testing.T) {
 	svc := usecase.NewAPIKeyService(newMemAPIKeyRepo())
 	ctx := context.Background()
-	_, _ = svc.Create(ctx, "key-1", "admin", "a@b.com")
-	_, _ = svc.Create(ctx, "key-2", "viewer", "a@b.com")
+	_, _ = svc.Create(ctx, "key-1", "admin", "a@b.com", false)
+	_, _ = svc.Create(ctx, "key-2", "viewer", "a@b.com", false)
 
 	keys, err := svc.List(ctx)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestAPIKeyService_List(t *testing.T) {
 func TestAPIKeyService_Revoke(t *testing.T) {
 	svc := usecase.NewAPIKeyService(newMemAPIKeyRepo())
 	ctx := context.Background()
-	res, _ := svc.Create(ctx, "ci-key", "developer", "admin@example.com")
+	res, _ := svc.Create(ctx, "ci-key", "developer", "admin@example.com", false)
 
 	if err := svc.Revoke(ctx, res.Key.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
@@ -81,7 +81,7 @@ func TestAPIKeyService_Revoke(t *testing.T) {
 func TestAPIKeyService_Delete(t *testing.T) {
 	svc := usecase.NewAPIKeyService(newMemAPIKeyRepo())
 	ctx := context.Background()
-	res, _ := svc.Create(ctx, "ci-key", "viewer", "admin@example.com")
+	res, _ := svc.Create(ctx, "ci-key", "viewer", "admin@example.com", false)
 
 	if err := svc.Delete(ctx, res.Key.ID); err != nil {
 		t.Fatalf("Delete: %v", err)

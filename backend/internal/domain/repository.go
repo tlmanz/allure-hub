@@ -87,6 +87,7 @@ type CleanupRunRepository interface {
 type APIKeyRepository interface {
 	Create(ctx context.Context, k *APIKey) error
 	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
+	GetByName(ctx context.Context, name string) (*APIKey, error)
 	List(ctx context.Context) ([]*APIKey, error)
 	// Search returns keys whose name or creator match query (case-insensitive
 	// substring). An empty query matches all keys.

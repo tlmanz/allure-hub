@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tlmanz/allure-hub/internal/domain"
+	kit "github.com/tlmanz/authkit"
 	"go.uber.org/zap"
 )
 
@@ -23,20 +25,20 @@ type UploadService struct {
 	sessionRepo     domain.UploadSessionRepository
 	envRepo         domain.EnvironmentRepository
 	projectRepo     domain.ProjectRepository
-	settingsRepo    domain.SystemSettingsRepository
+	apiKeyRepo      domain.APIKeyRepository
 	bus             *EventBus
 	assembleTempDir string // directory for assembled zip temp file; defaults to chunk parent dir
 	log             *zap.Logger
 }
 
-func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, envRepo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, settingsRepo domain.SystemSettingsRepository, bus *EventBus, assembleTempDir string, log *zap.Logger) *UploadService {
+func NewUploadService(reportSvc *ReportService, fs FileStorage, sessionRepo domain.UploadSessionRepository, envRepo domain.EnvironmentRepository, projectRepo domain.ProjectRepository, apiKeyRepo domain.APIKeyRepository, bus *EventBus, assembleTempDir string, log *zap.Logger) *UploadService {
 	return &UploadService{
 		reportSvc:       reportSvc,
 		fs:              fs,
 		sessionRepo:     sessionRepo,
 		envRepo:         envRepo,
 		projectRepo:     projectRepo,
-		settingsRepo:    settingsRepo,
+		apiKeyRepo:      apiKeyRepo,
 		bus:             bus,
 		assembleTempDir: assembleTempDir,
 		log:             log,
@@ -296,14 +298,16 @@ func (s *UploadService) DeleteSession(ctx context.Context, id string) error {
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
-// autoCreateEnabled reports whether the auto_create_env_project setting is on.
-// Defaults to false on any error or missing key.
+// autoCreateEnabled reports whether auto-create is active for the current request.
+// Only API key callers have the per-key flag; OAuth sessions never auto-create.
 func (s *UploadService) autoCreateEnabled(ctx context.Context) bool {
-	val, err := s.settingsRepo.Get(ctx, "auto_create_env_project")
-	if err != nil {
-		return false
+	if u := kit.UserFromCtx(ctx); u != nil && u.Provider == "apikey" {
+		name := strings.TrimPrefix(u.Email, "apikey:")
+		if key, err := s.apiKeyRepo.GetByName(ctx, name); err == nil && key != nil {
+			return key.AutoCreateEnvProject
+		}
 	}
-	return val == "true"
+	return false
 }
 
 // validateEnvAndProject checks that the environment and project both exist.

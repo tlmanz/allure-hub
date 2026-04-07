@@ -171,11 +171,11 @@ export const api = {
       `/settings/apikeys?search=${enc(search)}&offset=${offset}`,
     ),
 
-  createAPIKey: (name: string, role: string) =>
+  createAPIKey: (name: string, role: string, autoCreateEnvProject: boolean) =>
     request<{ key: APIKey; plaintext: string }>("/settings/apikeys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, role }),
+      body: JSON.stringify({ name, role, autoCreateEnvProject }),
     }),
 
   revokeAPIKey: (id: string) =>
@@ -253,17 +253,6 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thresholdPercent }),
-    }),
-
-  // Settings - publishing
-  getPublishingSettings: () =>
-    request<{ autoCreateEnvAndProject: boolean }>("/settings/publishing"),
-
-  setPublishingSettings: (settings: { autoCreateEnvAndProject: boolean }) =>
-    request<void>("/settings/publishing", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
     }),
 
   // Chunked upload - drives Init → Chunks → Complete → Generate.

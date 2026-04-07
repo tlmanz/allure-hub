@@ -99,6 +99,7 @@ export interface APIKey {
   createdAt: string
   expiresAt?: string
   isActive: boolean
+  autoCreateEnvProject: boolean
 }
 
 export interface TrackedUser {

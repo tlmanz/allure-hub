@@ -27,7 +27,7 @@ type CreateResult struct {
 }
 
 // Create generates a new API key, persists the hash, and returns the plaintext once.
-func (s *APIKeyService) Create(ctx context.Context, name, role, createdBy string) (*CreateResult, error) {
+func (s *APIKeyService) Create(ctx context.Context, name, role, createdBy string, autoCreateEnvProject bool) (*CreateResult, error) {
 	switch role {
 	case "admin", "developer", "viewer":
 	default:
@@ -40,13 +40,14 @@ func (s *APIKeyService) Create(ctx context.Context, name, role, createdBy string
 	}
 
 	k := &domain.APIKey{
-		ID:        uuid.New().String(),
-		Name:      name,
-		CreatedBy: createdBy,
-		Role:      role,
-		KeyHash:   hash,
-		CreatedAt: time.Now().UTC(),
-		IsActive:  true,
+		ID:                   uuid.New().String(),
+		Name:                 name,
+		CreatedBy:            createdBy,
+		Role:                 role,
+		KeyHash:              hash,
+		CreatedAt:            time.Now().UTC(),
+		IsActive:             true,
+		AutoCreateEnvProject: autoCreateEnvProject,
 	}
 	if err := s.repo.Create(ctx, k); err != nil {
 		return nil, fmt.Errorf("persist api key: %w", err)
