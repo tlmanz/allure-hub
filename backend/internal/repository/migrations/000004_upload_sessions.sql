@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE IF NOT EXISTS upload_sessions (
     id              TEXT PRIMARY KEY,
     upload_id       TEXT NOT NULL DEFAULT '',
@@ -22,3 +23,6 @@ CREATE TABLE IF NOT EXISTS upload_sessions (
 CREATE INDEX IF NOT EXISTS idx_upload_sessions_started_at ON upload_sessions(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_upload_sessions_upload_id  ON upload_sessions(upload_id);
 CREATE INDEX IF NOT EXISTS idx_upload_sessions_project_build ON upload_sessions(project_id, build_id);
+
+-- +goose Down
+DROP TABLE IF EXISTS upload_sessions;

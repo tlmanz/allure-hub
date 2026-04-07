@@ -1,3 +1,4 @@
+-- +goose Up
 -- Tracks OAuth users who have logged into allure-hub.
 -- Created on first login; last_login_at updated on every subsequent login.
 CREATE TABLE IF NOT EXISTS tracked_users (
@@ -24,5 +25,9 @@ CREATE TABLE IF NOT EXISTS api_keys (
     is_active    INTEGER NOT NULL DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_api_keys_hash     ON api_keys(key_hash);
-CREATE INDEX IF NOT EXISTS idx_api_keys_active   ON api_keys(is_active);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash   ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
+
+-- +goose Down
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS tracked_users;

@@ -1,5 +1,11 @@
 package domain
 
+// OverviewFilter scopes overview queries to a specific environment and/or project.
+type OverviewFilter struct {
+	EnvID     string
+	ProjectID string
+}
+
 // OverviewStats holds all data needed to render the analytics overview dashboard.
 type OverviewStats struct {
 	Summary            OverviewSummary      `json:"summary"`

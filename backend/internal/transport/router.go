@@ -35,7 +35,7 @@ type RouterConfig struct {
 
 // OverviewRepository is the minimal interface NewRouter needs for the overview handler.
 type OverviewRepository interface {
-	GetStats(ctx context.Context) (*domain.OverviewStats, error)
+	GetStats(ctx context.Context, f domain.OverviewFilter) (*domain.OverviewStats, error)
 }
 
 // NewRouter builds and returns the HTTP handler tree.

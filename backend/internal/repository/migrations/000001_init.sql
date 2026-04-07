@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE IF NOT EXISTS environments (
     id         TEXT PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -31,3 +32,8 @@ CREATE TABLE IF NOT EXISTS builds (
     UNIQUE(env_id, project_id, build_id),
     FOREIGN KEY (env_id, project_id) REFERENCES projects(environment_id, id) ON DELETE CASCADE
 );
+
+-- +goose Down
+DROP TABLE IF EXISTS builds;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS environments;

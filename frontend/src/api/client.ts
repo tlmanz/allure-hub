@@ -200,8 +200,16 @@ export const api = {
     request<void>(`/settings/users/${enc(email)}/role`, { method: "DELETE" }),
 
   // Overview analytics
-  getOverviewStats: (signal?: AbortSignal) =>
-    request<OverviewStats>("/overview", { signal }),
+  getOverviewStats: (
+    params?: { envId?: string; projectId?: string },
+    signal?: AbortSignal,
+  ) => {
+    const qs = new URLSearchParams();
+    if (params?.envId) qs.set("env_id", params.envId);
+    if (params?.projectId) qs.set("project_id", params.projectId);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request<OverviewStats>(`/overview${query}`, { signal });
+  },
 
   // Settings - data retention
   getRetentionSettings: () => request<RetentionSettings>("/settings/retention"),

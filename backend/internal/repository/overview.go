@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tlmanz/allure-hub/internal/domain"
@@ -14,21 +15,38 @@ type OverviewRepo struct{ db *DB }
 
 func NewOverviewRepo(db *DB) *OverviewRepo { return &OverviewRepo{db} }
 
+// buildWhere constructs a WHERE clause from (column, value) pairs, skipping empty values.
+func buildWhere(pairs ...string) (string, []any) {
+	var conds []string
+	var args []any
+	for i := 0; i+1 < len(pairs); i += 2 {
+		col, val := pairs[i], pairs[i+1]
+		if val != "" {
+			conds = append(conds, col+" = ?")
+			args = append(args, val)
+		}
+	}
+	if len(conds) == 0 {
+		return "", nil
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
 // GetStats returns the full set of analytics data for the overview dashboard.
-func (r *OverviewRepo) GetStats(ctx context.Context) (*domain.OverviewStats, error) {
-	summary, err := r.getSummary(ctx)
+func (r *OverviewRepo) GetStats(ctx context.Context, f domain.OverviewFilter) (*domain.OverviewStats, error) {
+	summary, err := r.getSummary(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	trends, err := r.getDailyTrends(ctx)
+	trends, err := r.getDailyTrends(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	topFailing, err := r.getTopFailingProjects(ctx)
+	topFailing, err := r.getTopFailingProjects(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	recent, err := r.getRecentBuilds(ctx)
+	recent, err := r.getRecentBuilds(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -40,23 +58,36 @@ func (r *OverviewRepo) GetStats(ctx context.Context) (*domain.OverviewStats, err
 	}, nil
 }
 
-func (r *OverviewRepo) getSummary(ctx context.Context) (*domain.OverviewSummary, error) {
+func (r *OverviewRepo) getSummary(ctx context.Context, f domain.OverviewFilter) (*domain.OverviewSummary, error) {
 	var s domain.OverviewSummary
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM environments`).Scan(&s.TotalEnvironments)
+
+	// environments count (filter by env if set)
+	envWhere, envArgs := buildWhere("id", f.EnvID)
+	err := r.db.QueryRowContext(ctx,
+		r.db.Ph(`SELECT COUNT(*) FROM environments`+envWhere),
+		envArgs...,
+	).Scan(&s.TotalEnvironments)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview environments count: %w", err)
 	}
-	err = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM projects`).Scan(&s.TotalProjects)
+
+	// projects count (filter by environment_id and/or id)
+	projWhere, projArgs := buildWhere("environment_id", f.EnvID, "id", f.ProjectID)
+	err = r.db.QueryRowContext(ctx,
+		r.db.Ph(`SELECT COUNT(*) FROM projects`+projWhere),
+		projArgs...,
+	).Scan(&s.TotalProjects)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview projects count: %w", err)
 	}
+
+	// builds summary (filter by env_id and/or project_id)
+	buildWhere, buildArgs := buildWhere("env_id", f.EnvID, "project_id", f.ProjectID)
 	var totalTests int
-	err = r.db.QueryRowContext(ctx, `
-		SELECT
-		  COUNT(*),
-		  COALESCE(SUM(passed), 0),
-		  COALESCE(SUM(failed), 0)
-		FROM builds`).Scan(&s.TotalBuilds, &s.TotalPassed, &s.TotalFailed)
+	err = r.db.QueryRowContext(ctx,
+		r.db.Ph(`SELECT COUNT(*), COALESCE(SUM(passed), 0), COALESCE(SUM(failed), 0) FROM builds`+buildWhere),
+		buildArgs...,
+	).Scan(&s.TotalBuilds, &s.TotalPassed, &s.TotalFailed)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview builds summary: %w", err)
 	}
@@ -68,10 +99,20 @@ func (r *OverviewRepo) getSummary(ctx context.Context) (*domain.OverviewSummary,
 }
 
 // getDailyTrends returns per-day pass/fail/skipped totals for the last 30 days.
-// SUBSTR(created_at, 1, 10) extracts the YYYY-MM-DD prefix from RFC3339 strings,
-// and works identically for both SQLite and PostgreSQL TEXT columns.
-func (r *OverviewRepo) getDailyTrends(ctx context.Context) ([]domain.DailyTrend, error) {
+func (r *OverviewRepo) getDailyTrends(ctx context.Context, f domain.OverviewFilter) ([]domain.DailyTrend, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -29).Format("2006-01-02")
+
+	extraWhere := ""
+	args := []any{cutoff}
+	if f.EnvID != "" {
+		extraWhere += " AND env_id = ?"
+		args = append(args, f.EnvID)
+	}
+	if f.ProjectID != "" {
+		extraWhere += " AND project_id = ?"
+		args = append(args, f.ProjectID)
+	}
+
 	rows, err := r.db.QueryContext(ctx,
 		r.db.Ph(`SELECT
 		  SUBSTR(created_at, 1, 10) AS day,
@@ -80,10 +121,10 @@ func (r *OverviewRepo) getDailyTrends(ctx context.Context) ([]domain.DailyTrend,
 		  COALESCE(SUM(skipped), 0),
 		  COUNT(*)
 		FROM builds
-		WHERE SUBSTR(created_at, 1, 10) >= ?
+		WHERE SUBSTR(created_at, 1, 10) >= ?`+extraWhere+`
 		GROUP BY day
 		ORDER BY day ASC`),
-		cutoff,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview daily trends: %w", err)
@@ -105,9 +146,20 @@ func (r *OverviewRepo) getDailyTrends(ctx context.Context) ([]domain.DailyTrend,
 }
 
 // getTopFailingProjects returns the 5 projects with the most cumulative failures.
-func (r *OverviewRepo) getTopFailingProjects(ctx context.Context) ([]domain.ProjectFailStats, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT
+func (r *OverviewRepo) getTopFailingProjects(ctx context.Context, f domain.OverviewFilter) ([]domain.ProjectFailStats, error) {
+	extraWhere := ""
+	var args []any
+	if f.EnvID != "" {
+		extraWhere += " AND b.env_id = ?"
+		args = append(args, f.EnvID)
+	}
+	if f.ProjectID != "" {
+		extraWhere += " AND b.project_id = ?"
+		args = append(args, f.ProjectID)
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Ph(`SELECT
 		  b.env_id,
 		  b.project_id,
 		  p.name,
@@ -121,10 +173,13 @@ func (r *OverviewRepo) getTopFailingProjects(ctx context.Context) ([]domain.Proj
 		FROM builds b
 		JOIN projects p ON p.environment_id = b.env_id AND p.id = b.project_id
 		JOIN environments e ON e.id = b.env_id
+		WHERE 1=1`+extraWhere+`
 		GROUP BY b.env_id, b.project_id, p.name, e.name
 		HAVING COALESCE(SUM(b.failed), 0) > 0
 		ORDER BY total_failed DESC
-		LIMIT 5`)
+		LIMIT 5`),
+		args...,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview top failing: %w", err)
 	}
@@ -146,14 +201,28 @@ func (r *OverviewRepo) getTopFailingProjects(ctx context.Context) ([]domain.Proj
 }
 
 // getRecentBuilds returns the 10 most recent builds across all projects.
-func (r *OverviewRepo) getRecentBuilds(ctx context.Context) ([]*domain.Build, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT b.id, b.env_id, b.project_id, b.build_id, b.created_at,
+func (r *OverviewRepo) getRecentBuilds(ctx context.Context, f domain.OverviewFilter) ([]*domain.Build, error) {
+	extraWhere := ""
+	var args []any
+	if f.EnvID != "" {
+		extraWhere += " AND b.env_id = ?"
+		args = append(args, f.EnvID)
+	}
+	if f.ProjectID != "" {
+		extraWhere += " AND b.project_id = ?"
+		args = append(args, f.ProjectID)
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Ph(`SELECT b.id, b.env_id, b.project_id, b.build_id, b.created_at,
 		       b.report_url, b.passed, b.failed, b.skipped, b.total,
 		       b.status, b.uploaded_by, b.config_snapshot, b.generation_warnings
 		FROM builds b
+		WHERE 1=1`+extraWhere+`
 		ORDER BY b.created_at DESC
-		LIMIT 10`)
+		LIMIT 10`),
+		args...,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: overview recent builds: %w", err)
 	}

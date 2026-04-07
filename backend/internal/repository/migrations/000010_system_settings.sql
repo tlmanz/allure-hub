@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE IF NOT EXISTS system_settings (
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,
@@ -16,6 +17,10 @@ CREATE TABLE IF NOT EXISTS cleanup_runs (
 );
 
 -- Seed cleanup worker defaults.
-INSERT INTO system_settings (key, value, updated_at) VALUES ('retention_days',     '90',    CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
-INSERT INTO system_settings (key, value, updated_at) VALUES ('cleanup_interval_hours', '6', CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
-INSERT INTO system_settings (key, value, updated_at) VALUES ('cleanup_dry_run',    'false', CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
+INSERT INTO system_settings (key, value, updated_at) VALUES ('retention_days',          '90',    CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
+INSERT INTO system_settings (key, value, updated_at) VALUES ('cleanup_interval_hours',  '6',     CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
+INSERT INTO system_settings (key, value, updated_at) VALUES ('cleanup_dry_run',         'false', CURRENT_TIMESTAMP) ON CONFLICT (key) DO NOTHING;
+
+-- +goose Down
+DROP TABLE IF EXISTS cleanup_runs;
+DROP TABLE IF EXISTS system_settings;

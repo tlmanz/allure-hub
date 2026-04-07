@@ -11,7 +11,7 @@ import (
 
 // overviewRepo is the minimal interface the OverviewHandler needs.
 type overviewRepo interface {
-	GetStats(ctx context.Context) (*domain.OverviewStats, error)
+	GetStats(ctx context.Context, f domain.OverviewFilter) (*domain.OverviewStats, error)
 }
 
 // OverviewHandler serves the analytics overview dashboard endpoint.
@@ -24,9 +24,13 @@ func NewOverviewHandler(repo overviewRepo, log *zap.Logger) *OverviewHandler {
 	return &OverviewHandler{repo: repo, log: log}
 }
 
-// GetStats handles GET /api/overview
+// GetStats handles GET /api/overview?env_id=...&project_id=...
 func (h *OverviewHandler) GetStats(w http.ResponseWriter, r *http.Request) {
-	stats, err := h.repo.GetStats(r.Context())
+	f := domain.OverviewFilter{
+		EnvID:     r.URL.Query().Get("env_id"),
+		ProjectID: r.URL.Query().Get("project_id"),
+	}
+	stats, err := h.repo.GetStats(r.Context(), f)
 	if err != nil {
 		h.log.Error("overview stats failed", zap.Error(err))
 		http.Error(w, "failed to load overview stats", http.StatusInternalServerError)

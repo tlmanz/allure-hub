@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AreaChart,
@@ -16,7 +16,7 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../api/client";
-import type { OverviewStats } from "../types";
+import type { Environment, OverviewStats, Project } from "../types";
 import { formatDate } from "../utils/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,6 +123,122 @@ function Card({
   );
 }
 
+// ── Filter dropdown ───────────────────────────────────────────────────────────
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+function FilterDropdown({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  options,
+  icon,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  placeholder: string;
+  options: FilterOption[];
+  icon: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+  const label = selected?.label ?? placeholder;
+  const isActive = !!value;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold font-headline transition-colors
+          disabled:opacity-40 disabled:cursor-not-allowed
+          ${isActive
+            ? "bg-primary/10 text-primary border border-primary/20"
+            : "text-on-surface-variant border border-outline-variant/30 hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+          }`}
+      >
+        <span className="material-symbols-outlined text-[14px]">{icon}</span>
+        <span className="max-w-[120px] truncate">{label}</span>
+        <span className="material-symbols-outlined text-[14px] text-on-surface-variant">
+          expand_more
+        </span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 top-full mt-1 min-w-[160px] rounded-xl border shadow-lg z-50 py-1 overflow-hidden"
+          style={{
+            background: "rgb(var(--color-surface-container))",
+            borderColor: "rgb(var(--color-outline-variant) / 0.4)",
+          }}
+        >
+          {/* "All" option */}
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2
+              ${!value
+                ? "text-primary font-semibold"
+                : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
+          >
+            {!value && (
+              <span className="material-symbols-outlined text-[12px] text-primary">check</span>
+            )}
+            <span className={!value ? "" : "ml-[20px]"}>{placeholder}</span>
+          </button>
+
+          {options.length > 0 && (
+            <div
+              className="my-1 border-t"
+              style={{ borderColor: "rgb(var(--color-outline-variant) / 0.2)" }}
+            />
+          )}
+
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center gap-2
+                ${value === opt.value
+                  ? "text-primary font-semibold"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
+            >
+              {value === opt.value && (
+                <span className="material-symbols-outlined text-[12px] text-primary">check</span>
+              )}
+              <span className={value === opt.value ? "" : "ml-[20px]"} title={opt.label}>
+                {opt.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
@@ -130,6 +246,26 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Filter state
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedEnvId, setSelectedEnvId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  // Load environments once on mount
+  useEffect(() => {
+    api.listEnvironments().then(setEnvironments).catch(() => {});
+  }, []);
+
+  // Load projects when environment changes
+  useEffect(() => {
+    setSelectedProjectId("");
+    setProjects([]);
+    if (!selectedEnvId) return;
+    api.listProjects(selectedEnvId).then(setProjects).catch(() => {});
+  }, [selectedEnvId]);
+
+  // Load stats when filters change
   useEffect(() => {
     const ac = new AbortController();
     let stopped = false;
@@ -138,9 +274,14 @@ export default function OverviewPage() {
       setLoading(true);
       setError(null);
 
+      const params = {
+        envId: selectedEnvId || undefined,
+        projectId: selectedProjectId || undefined,
+      };
+
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const data = await api.getOverviewStats(ac.signal);
+          const data = await api.getOverviewStats(params, ac.signal);
           if (!stopped) {
             setStats(data);
             setError(null);
@@ -168,7 +309,13 @@ export default function OverviewPage() {
       stopped = true;
       ac.abort();
     };
-  }, []);
+  }, [selectedEnvId, selectedProjectId]);
+
+  const scopeLabel = selectedProjectId
+    ? `· ${projects.find((p) => p.id === selectedProjectId)?.name ?? selectedProjectId}`
+    : selectedEnvId
+      ? `· ${environments.find((e) => e.id === selectedEnvId)?.name ?? selectedEnvId}`
+      : "· analytics across all environments";
 
   if (loading)
     return (
@@ -220,13 +367,44 @@ export default function OverviewPage() {
   return (
     <div className="h-full flex flex-col gap-3">
       {/* ── Header ── */}
-      <div className="flex items-baseline gap-2 flex-shrink-0">
-        <h1 className="text-xl font-black font-headline text-on-surface tracking-tight">
-          Overview
-        </h1>
-        <span className="text-sm text-on-surface-variant">
-          · analytics across all environments
-        </span>
+      <div className="flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-xl font-black font-headline text-on-surface tracking-tight">
+            Overview
+          </h1>
+          <span className="text-sm text-on-surface-variant">{scopeLabel}</span>
+        </div>
+
+        {/* ── Filters ── */}
+        <div className="flex items-center gap-2">
+          <FilterDropdown
+            value={selectedEnvId}
+            onChange={(v) => setSelectedEnvId(v)}
+            placeholder="All environments"
+            icon="folder_open"
+            options={environments.map((env) => ({ value: env.id, label: env.name }))}
+          />
+          <FilterDropdown
+            value={selectedProjectId}
+            onChange={(v) => setSelectedProjectId(v)}
+            disabled={!selectedEnvId}
+            placeholder="All projects"
+            icon="inventory_2"
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+          />
+          {(selectedEnvId || selectedProjectId) && (
+            <button
+              onClick={() => {
+                setSelectedEnvId("");
+                setSelectedProjectId("");
+              }}
+              className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              title="Clear filters"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Summary stat cards ── */}

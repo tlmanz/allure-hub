@@ -3,65 +3,43 @@ package repository
 import (
 	"embed"
 	"fmt"
-	"sort"
-	"strings"
-	"time"
 
+	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 )
 
-//go:embed migrations/*.up.sql
+//go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-const createMigrationsTable = `
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version    TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL
-)`
-
 func migrate(db *DB, log *zap.Logger) error {
-	if _, err := db.Exec(createMigrationsTable); err != nil {
-		return fmt.Errorf("create schema_migrations: %w", err)
+	goose.SetBaseFS(migrationsFS)
+	goose.SetLogger(&gooseLogger{log: log})
+
+	dialect := "sqlite3"
+	if db.driver == "postgres" {
+		dialect = "postgres"
 	}
 
-	entries, err := migrationsFS.ReadDir("migrations")
-	if err != nil {
-		return fmt.Errorf("read migrations dir: %w", err)
+	if err := goose.SetDialect(dialect); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
 	}
 
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".up.sql") {
-			files = append(files, e.Name())
-		}
+	if err := goose.Up(db.DB, "migrations"); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
 	}
-	sort.Strings(files)
 
-	for _, name := range files {
-		version := strings.TrimSuffix(name, ".up.sql")
-
-		var count int
-		if err := db.QueryRow(db.Ph(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`), version).Scan(&count); err != nil {
-			return fmt.Errorf("check migration %s: %w", version, err)
-		}
-		if count > 0 {
-			continue
-		}
-
-		data, err := migrationsFS.ReadFile("migrations/" + name)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
-		}
-		if _, err := db.Exec(string(data)); err != nil {
-			return fmt.Errorf("apply %s: %w", name, err)
-		}
-		if _, err := db.Exec(
-			db.Ph(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`),
-			version, time.Now().UTC().Format(time.RFC3339),
-		); err != nil {
-			return fmt.Errorf("record migration %s: %w", version, err)
-		}
-		log.Info("applied migration", zap.String("version", version))
-	}
 	return nil
+}
+
+// gooseLogger adapts *zap.Logger to the goose.Logger interface.
+type gooseLogger struct {
+	log *zap.Logger
+}
+
+func (l *gooseLogger) Printf(format string, v ...interface{}) {
+	l.log.Sugar().Infof(format, v...)
+}
+
+func (l *gooseLogger) Fatalf(format string, v ...interface{}) {
+	l.log.Sugar().Errorf(format, v...)
 }
