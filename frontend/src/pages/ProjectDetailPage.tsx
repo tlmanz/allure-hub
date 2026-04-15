@@ -116,9 +116,9 @@ export default function ProjectDetailPage() {
     const lines = yaml.split("\n");
 
     return lines.map((line, idx) => {
-      const keyValueMatch = line.match(
-        /^(\s*-?\s*)([^:#\n][^:]*)(\s*:\s*)(.*)$/,
-      );
+      const keyValueMatch = line.includes(":")
+        ? line.match(/^(\s*-?\s*)([^:#\n][^:]*)(\s*:\s*)(.*)$/)
+        : null;
       const commentOnlyMatch = line.match(/^(\s*)(#.*)$/);
 
       const lineNode = (() => {
